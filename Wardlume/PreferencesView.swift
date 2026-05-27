@@ -15,9 +15,9 @@ import UniformTypeIdentifiers
 
 struct PreferencesView: View {
     @ObservedObject var reactionManager: ReactionManager
+    @ObservedObject private var userAssets = UserAssetManager.shared
     
-    @State private var isTargeted: Bool = false
-    @State private var importError: PackLoaderError? = nil
+    @State private var assetError: UserAssetError? = nil
     
     var body: some View {
         Form {
@@ -29,10 +29,6 @@ struct PreferencesView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                
-                Text("Custom reaction packs coming in v1.6 — bring your own image and sound.")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
             }
             
             // ── Audio Toggle ──────────────────────────────────────────────────
@@ -73,74 +69,49 @@ struct PreferencesView: View {
                 }
             }
             
-            // ── Drag-and-Drop Import Zone ─────────────────────────────────────
+            // ── Your Custom Assets ────────────────────────────────────────────
             Section {
-                ZStack {
-                    // Background fill
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(isTargeted ? Color.accentColor.opacity(0.1) : Color.clear)
-                    
-                    // Dashed border overlay
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(
-                            isTargeted ? Color.accentColor : Color.secondary,
-                            style: StrokeStyle(lineWidth: 1.5, dash: [6])
-                        )
-                    
-                    // Content
-                    VStack(spacing: 12) {
-                        Image(systemName: "arrow.down.circle")
-                            .font(.title2)
-                            .foregroundColor(isTargeted ? .accentColor : .secondary)
-                        
-                        Text("Drop pack folder here to install")
-                            .font(.body)
-                            .foregroundColor(isTargeted ? .accentColor : .secondary)
-                    }
-                    .padding(.vertical, 24)
+                HStack(alignment: .top, spacing: 16) {
+                    ImageAssetSlotView(
+                        title: "Base Image",
+                        assetURL: userAssets.baseImageURL,
+                        onDrop: { url in
+                            do { try userAssets.setBaseImage(from: url) }
+                            catch let e as UserAssetError { assetError = e }
+                            catch { assetError = .copyFailed(underlying: error) }
+                        },
+                        onClear: { userAssets.clearBaseImage() }
+                    )
+                    ImageAssetSlotView(
+                        title: "Reaction Image",
+                        assetURL: userAssets.reactionImageURL,
+                        onDrop: { url in
+                            do { try userAssets.setReactionImage(from: url) }
+                            catch let e as UserAssetError { assetError = e }
+                            catch { assetError = .copyFailed(underlying: error) }
+                        },
+                        onClear: { userAssets.clearReactionImage() }
+                    )
+                    AudioAssetSlotView(
+                        assetURL: userAssets.audioURL,
+                        onDrop: { url in
+                            do { try userAssets.setAudio(from: url) }
+                            catch let e as UserAssetError { assetError = e }
+                            catch { assetError = .copyFailed(underlying: error) }
+                        },
+                        onClear: { userAssets.clearAudio() }
+                    )
                 }
-                .frame(height: 80)
-                .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
-                    guard let provider = providers.first else { return false }
-                    
-                    _ = provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier,
-                                          options: nil) { item, error in
-                        var resolvedURL: URL?
-                        if let url = item as? URL {
-                            resolvedURL = url
-                        } else if let data = item as? Data,
-                                  let url = URL(dataRepresentation: data, relativeTo: nil) {
-                            resolvedURL = url
-                        }
-                        
-                        guard let url = resolvedURL else {
-                            DispatchQueue.main.async {
-                                importError = .copyFailed(
-                                    underlying: error ?? NSError(domain: "Wardlume",
-                                                                 code: -1,
-                                                                 userInfo: [NSLocalizedDescriptionKey:
-                                                                            "could not load dropped item URL"]))
-                            }
-                            return
-                        }
-                        
-                        DispatchQueue.main.async {
-                            do {
-                                try reactionManager.importPack(at: url)
-                            } catch let error as PackLoaderError {
-                                importError = error
-                            } catch {
-                                importError = .copyFailed(underlying: error)
-                            }
-                        }
-                    }
-                    
-                    return true
-                }
+                Text("Drop a file on any slot to customize your reactions. Click × to revert to the active pack's default.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            } header: {
+                Text("Your Custom Assets").font(.headline)
             }
         }
         .padding()
-        .alert(item: $importError) { error in
+        .alert(item: $assetError) { error in
             Alert(
                 title: Text("Import Failed"),
                 message: Text(error.errorDescription ?? "An unknown error occurred."),

@@ -90,6 +90,13 @@ final class ReactionManager: ObservableObject {
     /// PreferencesView binds to this instead of calling ReactionPack.all directly.
     @Published private(set) var availablePacks: [ReactionPack] = []
 
+    /// Phase 4b: The currently active pack, resolved from activePackID.
+    /// Falls back to Silent Professional if activePackID is invalid.
+    /// Used by AppDelegate to resolve the base image at ward activation time.
+    var activePack: ReactionPack {
+        ReactionPack.all.first(where: { $0.id == activePackID }) ?? .silentProfessional
+    }
+
     // -------------------------------------------------------------------------
     // MARK: — Private state
     // -------------------------------------------------------------------------
@@ -371,11 +378,11 @@ final class ReactionManager: ObservableObject {
 
     /// Attempts to load and play the pack's audio asset.
     ///
-    /// Silent no-op when the bundle file is absent — this is the expected
-    /// Phase 2.5b state. No log emitted on missing audio (unlike the image
-    /// fallback) because audio is optional by design even for image packs.
+    /// Phase 4b: Uses the resolution chain (user override → pack bundle → silent).
+    /// Silent no-op when no audio URL is resolved. No log emitted on missing audio
+    /// because audio is optional by design even for image packs.
     private func playAudio(for pack: ReactionPack) {
-        guard let url = pack.audioURL else { return }
+        guard let url = ReactionPack.resolvedAudioURL(for: pack) else { return }
         audioPlayer = try? AVAudioPlayer(contentsOf: url)
         audioPlayer?.play()
     }

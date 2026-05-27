@@ -227,15 +227,47 @@ extension ReactionPack {
 }
 
 // ---------------------------------------------------------------------------
-// MARK: — Static URL helpers (deleted in Phase 3a)
+// MARK: — Phase 4b: Resolution chain helpers
 // ---------------------------------------------------------------------------
-//
-// The static imageURL(for:) and audioURL(for:) helpers that previously lived
-// here have been removed. Their two call sites are updated to read the instance
-// properties directly:
-//
-//   ReactionOverlayView.make()    →  pack.reactionImageURL (renamed in Phase 4a)
-//   ReactionManager.playAudio()   →  pack.audioURL
-//
-// This is Option A from the Phase 3a plan: pack instances are self-contained
-// with resolved URLs set at construction time. No lazy helper indirection.
+
+extension ReactionPack {
+
+    /// Resolves the base image to render during ward-active state.
+    ///
+    /// Resolution chain:
+    ///   1. UserAssetManager.shared.baseImageURL (user override)
+    ///   2. pack.baseImageURL (bundled asset)
+    ///   3. nil (Metal shader fallback)
+    ///
+    /// - Parameter pack: The active reaction pack
+    /// - Returns: URL to the base image, or nil if no base image is available
+    static func resolvedBaseImageURL(for pack: ReactionPack) -> URL? {
+        UserAssetManager.shared.baseImageURL ?? pack.baseImageURL
+    }
+
+    /// Resolves the reaction image to swap in on intrusion.
+    ///
+    /// Resolution chain:
+    ///   1. UserAssetManager.shared.reactionImageURL (user override)
+    ///   2. pack.reactionImageURL (bundled asset)
+    ///   3. nil (fallback to minimal text overlay or placeholder)
+    ///
+    /// - Parameter pack: The active reaction pack
+    /// - Returns: URL to the reaction image, or nil if no reaction image is available
+    static func resolvedReactionImageURL(for pack: ReactionPack) -> URL? {
+        UserAssetManager.shared.reactionImageURL ?? pack.reactionImageURL
+    }
+
+    /// Resolves the audio URL to play during reaction.
+    ///
+    /// Resolution chain:
+    ///   1. UserAssetManager.shared.audioURL (user override)
+    ///   2. pack.audioURL (bundled asset)
+    ///   3. nil (silent)
+    ///
+    /// - Parameter pack: The active reaction pack
+    /// - Returns: URL to the audio file, or nil if no audio is available
+    static func resolvedAudioURL(for pack: ReactionPack) -> URL? {
+        UserAssetManager.shared.audioURL ?? pack.audioURL
+    }
+}

@@ -37,6 +37,11 @@ class MetalOverlayView: MTKView {
     // The compositor no longer needs to see through this view.
     override var isOpaque: Bool { true }
 
+    // Phase 4b: isPaused is inherited from MTKView and used by AppDelegate to
+    // halt the render loop when an opaque base image occludes the shader.
+    // Setting isPaused = true stops draw(in:) from being called, saving GPU cycles.
+    // No wrapper needed — MTKView.isPaused is public and directly accessible.
+
     private var commandQueue:  MTLCommandQueue!
     private var pipelineState: MTLRenderPipelineState!
 

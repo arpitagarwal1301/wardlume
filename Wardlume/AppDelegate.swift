@@ -30,6 +30,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     /// openPreferences() call and reused for subsequent opens.
     var preferencesWindow: NSWindow?
 
+    /// Phase 4b: base image overlay rendered above the Metal shader when the
+    /// active pack (or user override) provides a base image. nil when no base
+    /// image is present — the Metal shader renders directly.
+    private var baseImageView: NSImageView?
+
     // -------------------------------------------------------------------------
     // MARK: — Application launch
     // -------------------------------------------------------------------------
@@ -203,6 +208,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             // window.close() so no stale overlay outlives the ward session.
             reactionManager?.dismissReaction()
 
+            // Phase 4b: remove base image view and resume Metal rendering
+            baseImageView?.removeFromSuperview()
+            baseImageView = nil
+            if let metalView = window.contentView as? MetalOverlayView {
+                metalView.isPaused = false  // ready for next activation
+            }
+
             captureManager?.stopCapture()
             captureManager = nil
 
@@ -266,6 +278,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             overlayWindow         = window
             toggleMenuItem?.title = "Deactivate Ward"
             unlockMenuItem?.isEnabled = true
+
+            // Phase 4b: layer base image above the Metal shader if one is resolved.
+            let activePack = reactionManager?.activePack ?? .silentProfessional
+            if let baseURL = ReactionPack.resolvedBaseImageURL(for: activePack),
+               let image = NSImage(contentsOf: baseURL) {
+                let imageView = NSImageView(frame: metalView.bounds)
+                imageView.imageScaling = .scaleAxesIndependently
+                imageView.image = image
+                imageView.autoresizingMask = [.width, .height]
+                metalView.addSubview(imageView)
+                baseImageView = imageView
+                // Pause Metal rendering while occluded by opaque base image
+                metalView.isPaused = true
+                print("Wardlume [AppDelegate]: base image rendered, Metal paused")
+            } else {
+                baseImageView = nil
+                metalView.isPaused = false
+                print("Wardlume [AppDelegate]: no base image, Metal shader active")
+            }
 
             // Start desktop capture.
             guard let device = metalView.device else { return }

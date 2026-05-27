@@ -29,35 +29,35 @@ enum ReactionOverlayView {
 
     /// Returns the appropriate NSView for `pack`, sized to `frame`.
     ///
-    /// Routing logic:
-    ///   - `.minimal` packs always get `MinimalReactionView` (no asset lookup).
-    ///   - `.image` packs attempt to load the bundle image via
-    ///     `ReactionPack.imageURL(for:)`. On success: `ImageReactionView` in
-    ///     image mode. On failure (normal Phase 2.5b state): `ImageReactionView`
-    ///     in placeholder mode, with a one-time console log.
+    /// Phase 4b routing logic (with user-override resolution chain):
+    ///   1. If resolved reaction image exists (user override OR pack bundle):
+    ///      → ImageReactionView in image mode
+    ///   2. Else if pack.style == .minimal:
+    ///      → MinimalReactionView (text overlay)
+    ///   3. Else (image-style pack with no resolved image):
+    ///      → ImageReactionView in placeholder mode
+    ///
+    /// This preserves silentProfessional's minimal text overlay when no user
+    /// override is present, while allowing user overrides to apply globally
+    /// to any pack (including minimal-style packs).
     static func make(pack: ReactionPack, frame: CGRect) -> NSView {
-        switch pack.style {
-        case .minimal:
-            return MinimalReactionView(pack: pack, frame: frame)
-
-        case .image:
-            // Attempt asset load. Missing files are the expected Phase 4a
-            // state — contributors drop reactionImage.png here later without any code
-            // changes. See ReactionPack.reactionImageURL for the path convention.
-            let image: NSImage?
-            if let url = pack.reactionImageURL {
-                image = NSImage(contentsOf: url)
-            } else {
-                image = nil
-            }
-
-            if image == nil {
-                // Log once per overlay construction so contributors can see
-                // exactly which pack is still waiting for its asset file.
-                print("Wardlume [ReactionManager]: pack '\(pack.id)' reaction image asset missing — using placeholder")
-            }
-
+        // Phase 4b: resolve reaction image via user-override chain
+        let resolvedReactionURL = ReactionPack.resolvedReactionImageURL(for: pack)
+        
+        if let url = resolvedReactionURL, let image = NSImage(contentsOf: url) {
+            // Path 1: user override OR pack's bundled reaction image exists
             return ImageReactionView(pack: pack, image: image, frame: frame)
+            
+        } else if pack.style == .minimal {
+            // Path 2: no image available, but pack is minimal-style — render text overlay
+            return MinimalReactionView(pack: pack, frame: frame)
+            
+        } else {
+            // Path 3: image-style pack with no resolved image — show placeholder
+            // This is the expected Phase 4a state for grumpyOldMan/wizard until
+            // real assets are added to the bundle or user uploads an override.
+            print("Wardlume [ReactionOverlayView]: pack '\(pack.id)' reaction image asset missing — using placeholder")
+            return ImageReactionView(pack: pack, image: nil, frame: frame)
         }
     }
 }
