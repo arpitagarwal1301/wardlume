@@ -49,6 +49,24 @@ in real time.
   detected. This warns intruders off without displaying password boxes or
   interrupting the running agent.
 
+## Custom Assets (v0.2.0)
+
+Wardlume v0.2.0 introduces the bait-and-switch reaction model. Each reaction pack now has two image slots and an audio slot:
+
+- **Base image** — shown continuously while ward is active (replaces the Metal shader)
+- **Reaction image** — flashes briefly when someone touches input
+- **Audio** — plays alongside the reaction image
+
+You can override any of these by dragging a file into the corresponding slot in Preferences (Cmd+,). Your uploads apply to whichever pack is selected — mix and match across packs without creating "custom packs" you have to manage.
+
+Supported formats:
+- Images: PNG, JPEG, HEIC, GIF (max 10MB)
+- Audio: MP3, M4A, WAV (max 10MB)
+
+Click ✕ on any slot to revert to the active pack's bundled default.
+
+<!-- TODO: add Phase 4c screenshot showing the three asset slots -->
+
 ## Quick Demo
 
 You can see the ward in action in the hero demonstration at the top of this

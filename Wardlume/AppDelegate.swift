@@ -153,33 +153,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
                                     keyEquivalent: "")
         silentItem.target = self
         menu.addItem(silentItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        let audioItem = NSMenuItem(title: "Toggle Reaction Audio",
-                                   action: #selector(debugToggleAudio),
-                                   keyEquivalent: "")
-        audioItem.target = self
-        menu.addItem(audioItem)
 #endif
 
         statusBarItem?.menu = menu
 
-        // Phase 3a: discover user packs BEFORE ReactionManager is instantiated.
-        // ReactionManager.init() validates the persisted activePackID against
-        // ReactionPack.all. If a user pack was selected previously and the app
-        // is relaunched, that ID must already be in .all at validation time —
-        // otherwise init() silently falls back to silentProfessional.
-        PackLoader.shared.discoverUserPacks()
-        print("Wardlume [App]: loaded \(PackLoader.shared.userPacks.count) user pack(s)")
-
         // Phase 4a: initialize user asset slots from disk.
         // Accessing .shared triggers init() which calls scan().
         _ = UserAssetManager.shared
-        print("Wardlume [App]: UserAssetManager initialized — " +
-              "baseImage: \(UserAssetManager.shared.baseImageURL != nil), " +
-              "reactionImage: \(UserAssetManager.shared.reactionImageURL != nil), " +
-              "audio: \(UserAssetManager.shared.audioURL != nil)")
 
         // Phase 2a: instantiate the input lock manager at launch.
         // Held for the app lifetime; install() is called when ward activates.
@@ -397,8 +377,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         case #selector(testLock),
              #selector(debugSetPackGrumpy),
              #selector(debugSetPackWizard),
-             #selector(debugSetPackSilent),
-             #selector(debugToggleAudio):
+             #selector(debugSetPackSilent):
             return true
         #endif
         default:
@@ -491,12 +470,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     @objc func debugSetPackSilent() {
         reactionManager?.activePackID = ReactionPack.silentProfessional.id
         print("Wardlume [DEBUG]: active pack → silentProfessional")
-    }
-
-    @objc func debugToggleAudio() {
-        guard let rm = reactionManager else { return }
-        rm.audioEnabled.toggle()
-        print("Wardlume [DEBUG]: reaction audio \(rm.audioEnabled ? "ON" : "OFF")")
     }
 #endif
 }

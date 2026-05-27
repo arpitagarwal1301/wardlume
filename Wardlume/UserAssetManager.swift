@@ -374,7 +374,6 @@ final class UserAssetManager: ObservableObject {
             if filename.hasPrefix(slot.prefix + ".") {
                 do {
                     try FileManager.default.removeItem(at: fileURL)
-                    print("Wardlume [UserAssetManager]: deleted \(filename)")
                 } catch {
                     print("Wardlume [UserAssetManager]: failed to delete \(filename) — \(error.localizedDescription)")
                 }

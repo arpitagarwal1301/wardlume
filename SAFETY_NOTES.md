@@ -41,6 +41,12 @@ All three must be granted in System Settings → Privacy & Security.
 After granting permissions for the first time, Wardlume must be **quit and
 relaunched** for the new state to take effect.
 
+### User-Selected File Access (added in v0.2.0)
+
+Wardlume requests the `com.apple.security.files.user-selected.read-write` sandbox entitlement. This grants temporary access ONLY to files the user explicitly drags into the three asset slots in Preferences (Base Image, Reaction Image, Audio). It does NOT grant arbitrary filesystem access.
+
+Dropped files are validated (format, 10MB size cap) and copied into the app's sandboxed Application Support directory. The source files on disk are never modified. Clicking ✕ on a slot deletes the in-sandbox copy only.
+
 ## Unlock Methods
 
 | Path | Trigger | Status in v1 |

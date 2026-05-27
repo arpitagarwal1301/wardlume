@@ -14,8 +14,11 @@
 //    Bundle.main / Reactions / Packs / <pack.id> / image.png
 //    Bundle.main / Reactions / Packs / <pack.id> / audio.mp3
 //
-//  User pack URLs are resolved from the filesystem at load time by PackLoader
-//  and stored directly on the ReactionPack instance — no Bundle.main lookup.
+//  User pack URLs are resolved from the filesystem at load time and stored
+//  directly on the ReactionPack instance — no Bundle.main lookup.
+//
+//  Phase 4d: User pack folder loading removed. User customization is via
+//  UserAssetManager slots (Phase 4a/4b/4c), not custom pack folders.
 //
 //  ── Adding a built-in pack ───────────────────────────────────────────────────
 //    1. Add a static instance in extension ReactionPack (Built-in packs) below.
@@ -25,7 +28,8 @@
 //       needed — the folder is a blue folder reference.
 //
 //  ── Adding a user pack ──────────────────────────────────────────────────────
-//    See PackLoader.swift and the .wardpack format documentation (Phase 3d).
+//    Phase 4d: User pack folder loading removed. User customization is via
+//    UserAssetManager slots (drag-drop base/reaction images + audio in Preferences).
 
 import AppKit
 
@@ -56,7 +60,6 @@ enum PackStyle {
 ///
 /// Asset URLs are resolved at construction time:
 ///   • Built-in packs: Bundle.main lookup (nil until asset files are added)
-///   • User packs: absolute filesystem URL resolved by PackLoader at launch
 ///   • User overrides: filesystem URL from UserAssetManager (Phase 4a)
 struct ReactionPack {
 
@@ -101,7 +104,6 @@ struct ReactionPack {
 
     /// Resolved URL for the base image asset, set once at construction time.
     ///   • Built-in packs: Bundle.main lookup → nil until asset is in bundle
-    ///   • User packs: absolute filesystem URL from PackLoader
     ///   • Packs with no base image by design (e.g. Silent Professional): always nil
     ///
     /// Resolution chain at runtime (Phase 4b):
@@ -110,7 +112,6 @@ struct ReactionPack {
 
     /// Resolved URL for the reaction image asset, set once at construction time.
     ///   • Built-in packs: Bundle.main lookup → nil until asset is in bundle
-    ///   • User packs: absolute filesystem URL from PackLoader
     ///   • Packs with no reaction image by design (e.g. Silent Professional): always nil
     ///
     /// Resolution chain at runtime (Phase 4b):
@@ -205,25 +206,23 @@ extension ReactionPack {
 
     // ── Pack lists ────────────────────────────────────────────────────────────
 
-    /// Built-in packs only. Used by PackLoader for ID collision checks to avoid
-    /// a circular dependency: ReactionPack.all calls PackLoader.shared.userPacks,
-    /// so PackLoader must not call .all during loading — it uses .builtIn instead.
+    /// Built-in packs only.
+    ///
+    /// Phase 4d: This is now the complete pack list. User customization is via
+    /// UserAssetManager slots (drag-drop base/reaction images + audio), not
+    /// custom pack folders.
     static let builtIn: [ReactionPack] = [
         .silentProfessional,
         .grumpyOldMan,
         .wizard,
     ]
 
-    /// All packs available in this session: built-ins first, then user packs
-    /// discovered by PackLoader at launch.
+    /// All packs available in this session.
     ///
-    /// Computed so that user packs populated by PackLoader.shared.discoverUserPacks()
-    /// are automatically included after launch. Consumers (ReactionManager,
-    /// PreferencesView) call this and always get the full list.
-    ///
-    /// Thread safety: discoverUserPacks() runs once on the main thread at launch;
-    /// all consumers also run on the main thread. Safe for current usage.
-    static var all: [ReactionPack] { builtIn + PackLoader.shared.userPacks }
+    /// Phase 4d: User pack discovery removed. Only built-in packs are available.
+    /// User customization is via UserAssetManager slots (Phase 4a/4b/4c), not
+    /// custom pack folders.
+    static let all: [ReactionPack] = builtIn
 }
 
 // ---------------------------------------------------------------------------

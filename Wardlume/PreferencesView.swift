@@ -24,7 +24,7 @@ struct PreferencesView: View {
             // ── Active Pack Selection ─────────────────────────────────────────
             Section {
                 Picker("Active Reaction Pack", selection: $reactionManager.activePackID) {
-                    ForEach(reactionManager.availablePacks, id: \.id) { pack in
+                    ForEach(ReactionPack.all, id: \.id) { pack in
                         Text(pack.name).tag(pack.id)
                     }
                 }
