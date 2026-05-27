@@ -41,11 +41,11 @@ enum ReactionOverlayView {
             return MinimalReactionView(pack: pack, frame: frame)
 
         case .image:
-            // Attempt asset load. Missing files are the expected Phase 2.5b
-            // state — contributors drop image.png here later without any code
-            // changes. See ReactionPack.imageURL(for:) for the path convention.
+            // Attempt asset load. Missing files are the expected Phase 4a
+            // state — contributors drop reactionImage.png here later without any code
+            // changes. See ReactionPack.reactionImageURL for the path convention.
             let image: NSImage?
-            if let url = pack.imageURL {
+            if let url = pack.reactionImageURL {
                 image = NSImage(contentsOf: url)
             } else {
                 image = nil
@@ -54,7 +54,7 @@ enum ReactionOverlayView {
             if image == nil {
                 // Log once per overlay construction so contributors can see
                 // exactly which pack is still waiting for its asset file.
-                print("Wardlume [ReactionManager]: pack '\(pack.id)' image asset missing — using placeholder")
+                print("Wardlume [ReactionManager]: pack '\(pack.id)' reaction image asset missing — using placeholder")
             }
 
             return ImageReactionView(pack: pack, image: image, frame: frame)

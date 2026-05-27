@@ -91,7 +91,7 @@ enum PackLoaderError: Error, LocalizedError {
         case .manifestUnreadable(let err):
             return "manifest.json could not be decoded: \(err.localizedDescription)"
         case .manifestVersionUnsupported(let v):
-            return "unsupported manifestVersion \(v) (this build supports version 1)"
+            return "unsupported manifestVersion \(v) (this build supports version 2)"
         case .missingRequiredField(let field):
             return "missing required field '\(field)'"
         case .invalidFieldValue(let field, let reason):
@@ -371,7 +371,7 @@ final class PackLoader: ObservableObject {
 
         // ── 2. Manifest version check ─────────────────────────────────────────
 
-        guard manifest.manifestVersion == 1 else {
+        guard manifest.manifestVersion == 2 else {
             throw PackLoaderError.manifestVersionUnsupported(got: manifest.manifestVersion)
         }
 
@@ -421,23 +421,32 @@ final class PackLoader: ObservableObject {
 
         // ── 6. Resolve asset URLs (filesystem, not Bundle.main) ───────────────
 
-        let resolvedImageURL: URL?
-        if let imageFile = manifest.imageFile, !imageFile.isEmpty {
-            let url = folderURL.appendingPathComponent(imageFile)
+        let resolvedBaseImageURL: URL?
+        if let baseImageFile = manifest.baseImageFile, !baseImageFile.isEmpty {
+            let url = folderURL.appendingPathComponent(baseImageFile)
+            // Base image is optional — missing file is not an error, just nil.
+            resolvedBaseImageURL = FileManager.default.fileExists(atPath: url.path) ? url : nil
+        } else {
+            resolvedBaseImageURL = nil
+        }
+
+        let resolvedReactionImageURL: URL?
+        if let reactionImageFile = manifest.reactionImageFile, !reactionImageFile.isEmpty {
+            let url = folderURL.appendingPathComponent(reactionImageFile)
             if FileManager.default.fileExists(atPath: url.path) {
-                resolvedImageURL = url
+                resolvedReactionImageURL = url
             } else if packStyle == .image {
-                // Image packs that specify an imageFile but the file is absent
+                // Image packs that specify a reactionImageFile but the file is absent
                 // get a hard error — the user clearly intended an image pack but
                 // the asset is missing. They can use style: "minimal" for code-only packs.
-                throw PackLoaderError.referencedAssetMissing(filename: imageFile)
+                throw PackLoaderError.referencedAssetMissing(filename: reactionImageFile)
             } else {
-                // minimal pack with an imageFile entry — ignore it (imageFile is
+                // minimal pack with a reactionImageFile entry — ignore it (reactionImageFile is
                 // irrelevant for minimal packs, no need to throw).
-                resolvedImageURL = nil
+                resolvedReactionImageURL = nil
             }
         } else {
-            resolvedImageURL = nil
+            resolvedReactionImageURL = nil
         }
 
         let resolvedAudioURL: URL?
@@ -453,17 +462,19 @@ final class PackLoader: ObservableObject {
 
         let bg = manifest.backgroundColor
         return ReactionPack(
-            id:              manifest.id,
-            name:            manifest.name,
-            duration:        manifest.duration,
-            backgroundColor: NSColor(red:   bg.r, green: bg.g,
-                                     blue:  bg.b, alpha: bg.a),
-            imageBundleName: manifest.imageFile,   // kept for reference; URL is resolved
-            audioBundleName: manifest.audioFile,   // kept for reference; URL is resolved
-            placeholderText: manifest.placeholderText,
-            imageURL:        resolvedImageURL,
-            audioURL:        resolvedAudioURL,
-            style:           packStyle
+            id:                      manifest.id,
+            name:                    manifest.name,
+            duration:                manifest.duration,
+            backgroundColor:         NSColor(red:   bg.r, green: bg.g,
+                                             blue:  bg.b, alpha: bg.a),
+            baseImageBundleName:     manifest.baseImageFile,      // kept for reference; URL is resolved
+            reactionImageBundleName: manifest.reactionImageFile,  // kept for reference; URL is resolved
+            audioBundleName:         manifest.audioFile,          // kept for reference; URL is resolved
+            placeholderText:         manifest.placeholderText,
+            baseImageURL:            resolvedBaseImageURL,
+            reactionImageURL:        resolvedReactionImageURL,
+            audioURL:                resolvedAudioURL,
+            style:                   packStyle
         )
     }
 }
@@ -479,8 +490,12 @@ private extension PackLoader {
     /// Field names use camelCase to match JSON keys directly — no
     /// keyDecodingStrategy override required. Optional fields map to
     /// optional Swift properties.
+    ///
+    /// Phase 4a: manifestVersion bumped to 2. Version 1 manifests are rejected
+    /// with a clear log message directing users to upgrade.
     struct Manifest: Decodable {
-        /// Format version. Only version 1 is supported in this build.
+        /// Format version. Only version 2 is supported in this build.
+        /// Version 1 manifests (pre-bait-and-switch) are skipped with a log.
         let manifestVersion:   Int
 
         /// Globally unique pack identifier. Reverse-DNS recommended for user
@@ -500,9 +515,17 @@ private extension PackLoader {
         /// Rendering style. "image" or "minimal".
         let style:             String
 
-        /// Relative filename of the image asset within the pack folder.
+        /// Relative filename of the base image asset within the pack folder.
+        /// The base image is shown continuously while the ward is active.
+        /// Optional for all pack styles — base image is never required.
+        /// Phase 4a: new field.
+        let baseImageFile:     String?
+
+        /// Relative filename of the reaction image asset within the pack folder.
+        /// The reaction image swaps in on intrusion, then swaps back to base.
         /// Required when style == "image". Omit or set null for minimal packs.
-        let imageFile:         String?
+        /// Phase 4a: renamed from imageFile.
+        let reactionImageFile: String?
 
         /// Relative filename of the audio asset within the pack folder.
         /// Optional for all pack styles — audio is never required.
@@ -511,7 +534,7 @@ private extension PackLoader {
         /// Background colour as RGBA 0–1 floats.
         let backgroundColor:   ManifestColor
 
-        /// Text shown when image is missing (image style) or as the primary
+        /// Text shown when reaction image is missing (image style) or as the primary
         /// text label (minimal style).
         let placeholderText:   String
     }

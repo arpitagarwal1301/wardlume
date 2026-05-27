@@ -57,6 +57,7 @@ enum PackStyle {
 /// Asset URLs are resolved at construction time:
 ///   • Built-in packs: Bundle.main lookup (nil until asset files are added)
 ///   • User packs: absolute filesystem URL resolved by PackLoader at launch
+///   • User overrides: filesystem URL from UserAssetManager (Phase 4a)
 struct ReactionPack {
 
     /// Stable identifier.
@@ -72,35 +73,52 @@ struct ReactionPack {
     /// How long the overlay stays on screen before auto-dismissal.
     let duration: TimeInterval
 
-    /// Background colour used when imageURL is nil (all image packs until
+    /// Background colour used when baseImageURL is nil (all image packs until
     /// real assets are added) or as the permanent background for .minimal packs.
     let backgroundColor: NSColor
 
-    /// Base name of the image file inside the pack's bundle subdirectory.
-    /// Nil for packs that never show an image (e.g. Silent Professional).
-    /// For built-in packs only — the resolved URL is stored in imageURL.
-    /// For user packs this holds the imageFile value from the manifest.
-    let imageBundleName: String?
+    /// Base name of the base image file inside the pack's bundle subdirectory.
+    /// The base image is shown continuously while the ward is active.
+    /// Nil for packs that never show a base image (e.g. Silent Professional).
+    /// For built-in packs only — the resolved URL is stored in baseImageURL.
+    /// For user packs this holds the baseImageFile value from the manifest.
+    let baseImageBundleName: String?
+
+    /// Base name of the reaction image file inside the pack's bundle subdirectory.
+    /// The reaction image swaps in on intrusion, then swaps back to base.
+    /// Nil for packs that never show a reaction image (e.g. Silent Professional).
+    /// For built-in packs only — the resolved URL is stored in reactionImageURL.
+    /// For user packs this holds the reactionImageFile value from the manifest.
+    let reactionImageBundleName: String?
 
     /// Base name of the audio file inside the pack's bundle subdirectory.
     /// Nil for packs that are always silent.
-    /// Same note as imageBundleName above.
     let audioBundleName: String?
 
-    /// Text shown when imageURL is nil (image style) or as the primary
+    /// Text shown when baseImageURL is nil (image style) or as the primary
     /// label (minimal style).
     let placeholderText: String
 
-    /// Resolved URL for the image asset, set once at construction time.
+    /// Resolved URL for the base image asset, set once at construction time.
     ///   • Built-in packs: Bundle.main lookup → nil until asset is in bundle
     ///   • User packs: absolute filesystem URL from PackLoader
-    ///   • Packs with no image by design (e.g. Silent Professional): always nil
+    ///   • Packs with no base image by design (e.g. Silent Professional): always nil
     ///
-    /// ReactionOverlayView.make() reads this directly — no static helper needed.
-    let imageURL: URL?
+    /// Resolution chain at runtime (Phase 4b):
+    ///   user override → bundled base → Metal shader fallback
+    let baseImageURL: URL?
+
+    /// Resolved URL for the reaction image asset, set once at construction time.
+    ///   • Built-in packs: Bundle.main lookup → nil until asset is in bundle
+    ///   • User packs: absolute filesystem URL from PackLoader
+    ///   • Packs with no reaction image by design (e.g. Silent Professional): always nil
+    ///
+    /// Resolution chain at runtime (Phase 4b):
+    ///   user override → bundled reaction → if minimal-style pack, render text overlay → else no swap
+    let reactionImageURL: URL?
 
     /// Resolved URL for the audio asset, set once at construction time.
-    /// Same resolution strategy as imageURL.
+    /// Same resolution strategy as baseImageURL and reactionImageURL.
     /// nil means no audio for this pack (silent by design or asset absent).
     let audioURL: URL?
 
@@ -115,45 +133,55 @@ struct ReactionPack {
 extension ReactionPack {
 
     // ── Grumpy Old Man ────────────────────────────────────────────────────────
-    /// Image pack. Assets: Reactions/Packs/grumpyOldMan/image.png + audio.mp3.
-    /// Phase 2.5b state: no assets in bundle → imageURL/audioURL both nil →
-    /// overlay renders gray bg + "GRUMPY OLD MAN" placeholder text.
+    /// Image pack. Assets: Reactions/Packs/grumpyOldMan/baseImage.png,
+    /// reactionImage.png, audio.mp3.
+    /// Phase 4a state: no assets in bundle → baseImageURL/reactionImageURL/audioURL
+    /// all nil → overlay renders gray bg + "GRUMPY OLD MAN" placeholder text.
     static let grumpyOldMan = ReactionPack(
-        id:              "grumpyOldMan",
-        name:            "Grumpy Old Man",
-        duration:        2.0,
-        backgroundColor: NSColor(red: 0.4, green: 0.4, blue: 0.42, alpha: 1.0),
-        imageBundleName: "image",
-        audioBundleName: "audio",
-        placeholderText: "GRUMPY OLD MAN",
-        imageURL:        Bundle.main.url(forResource: "image",
-                                         withExtension: "png",
-                                         subdirectory: "Reactions/Packs/grumpyOldMan"),
-        audioURL:        Bundle.main.url(forResource: "audio",
-                                         withExtension: "mp3",
-                                         subdirectory: "Reactions/Packs/grumpyOldMan"),
-        style:           .image
+        id:                      "grumpyOldMan",
+        name:                    "Grumpy Old Man",
+        duration:                2.0,
+        backgroundColor:         NSColor(red: 0.4, green: 0.4, blue: 0.42, alpha: 1.0),
+        baseImageBundleName:     "baseImage",
+        reactionImageBundleName: "reactionImage",
+        audioBundleName:         "audio",
+        placeholderText:         "GRUMPY OLD MAN",
+        baseImageURL:            Bundle.main.url(forResource: "baseImage",
+                                                 withExtension: "png",
+                                                 subdirectory: "Reactions/Packs/grumpyOldMan"),
+        reactionImageURL:        Bundle.main.url(forResource: "reactionImage",
+                                                 withExtension: "png",
+                                                 subdirectory: "Reactions/Packs/grumpyOldMan"),
+        audioURL:                Bundle.main.url(forResource: "audio",
+                                                 withExtension: "mp3",
+                                                 subdirectory: "Reactions/Packs/grumpyOldMan"),
+        style:                   .image
     )
 
     // ── Wizard ────────────────────────────────────────────────────────────────
-    /// Image pack. Assets: Reactions/Packs/wizard/image.png + audio.mp3.
-    /// Phase 2.5b state: no assets in bundle → imageURL/audioURL both nil →
-    /// overlay renders dark purple bg + "WIZARD" placeholder text.
+    /// Image pack. Assets: Reactions/Packs/wizard/baseImage.png,
+    /// reactionImage.png, audio.mp3.
+    /// Phase 4a state: no assets in bundle → baseImageURL/reactionImageURL/audioURL
+    /// all nil → overlay renders dark purple bg + "WIZARD" placeholder text.
     static let wizard = ReactionPack(
-        id:              "wizard",
-        name:            "Wizard",
-        duration:        2.5,
-        backgroundColor: NSColor(red: 0.2, green: 0.1, blue: 0.3, alpha: 1.0),
-        imageBundleName: "image",
-        audioBundleName: "audio",
-        placeholderText: "WIZARD",
-        imageURL:        Bundle.main.url(forResource: "image",
-                                         withExtension: "png",
-                                         subdirectory: "Reactions/Packs/wizard"),
-        audioURL:        Bundle.main.url(forResource: "audio",
-                                         withExtension: "mp3",
-                                         subdirectory: "Reactions/Packs/wizard"),
-        style:           .image
+        id:                      "wizard",
+        name:                    "Wizard",
+        duration:                2.5,
+        backgroundColor:         NSColor(red: 0.2, green: 0.1, blue: 0.3, alpha: 1.0),
+        baseImageBundleName:     "baseImage",
+        reactionImageBundleName: "reactionImage",
+        audioBundleName:         "audio",
+        placeholderText:         "WIZARD",
+        baseImageURL:            Bundle.main.url(forResource: "baseImage",
+                                                 withExtension: "png",
+                                                 subdirectory: "Reactions/Packs/wizard"),
+        reactionImageURL:        Bundle.main.url(forResource: "reactionImage",
+                                                 withExtension: "png",
+                                                 subdirectory: "Reactions/Packs/wizard"),
+        audioURL:                Bundle.main.url(forResource: "audio",
+                                                 withExtension: "mp3",
+                                                 subdirectory: "Reactions/Packs/wizard"),
+        style:                   .image
     )
 
     // ── Silent Professional ───────────────────────────────────────────────────
@@ -161,16 +189,18 @@ extension ReactionPack {
     /// Renders: near-black background + 6pt red border frame + "ACCESS DENIED".
     /// This is the default pack and the safe fallback for unknown activePackIDs.
     static let silentProfessional = ReactionPack(
-        id:              "silentProfessional",
-        name:            "Silent Professional",
-        duration:        0.6,
-        backgroundColor: NSColor(red: 0.05, green: 0.05, blue: 0.05, alpha: 1.0),
-        imageBundleName: nil,
-        audioBundleName: nil,
-        placeholderText: "ACCESS DENIED",
-        imageURL:        nil,    // minimal style — never needs an image
-        audioURL:        nil,    // minimal style — always silent
-        style:           .minimal
+        id:                      "silentProfessional",
+        name:                    "Silent Professional",
+        duration:                0.6,
+        backgroundColor:         NSColor(red: 0.05, green: 0.05, blue: 0.05, alpha: 1.0),
+        baseImageBundleName:     nil,
+        reactionImageBundleName: nil,
+        audioBundleName:         nil,
+        placeholderText:         "ACCESS DENIED",
+        baseImageURL:            nil,    // minimal style — never needs an image
+        reactionImageURL:        nil,    // minimal style — never needs an image
+        audioURL:                nil,    // minimal style — always silent
+        style:                   .minimal
     )
 
     // ── Pack lists ────────────────────────────────────────────────────────────
@@ -204,7 +234,7 @@ extension ReactionPack {
 // here have been removed. Their two call sites are updated to read the instance
 // properties directly:
 //
-//   ReactionOverlayView.make()    →  pack.imageURL
+//   ReactionOverlayView.make()    →  pack.reactionImageURL (renamed in Phase 4a)
 //   ReactionManager.playAudio()   →  pack.audioURL
 //
 // This is Option A from the Phase 3a plan: pack instances are self-contained

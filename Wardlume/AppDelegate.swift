@@ -168,6 +168,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         PackLoader.shared.discoverUserPacks()
         print("Wardlume [App]: loaded \(PackLoader.shared.userPacks.count) user pack(s)")
 
+        // Phase 4a: initialize user asset slots from disk.
+        // Accessing .shared triggers init() which calls scan().
+        _ = UserAssetManager.shared
+        print("Wardlume [App]: UserAssetManager initialized — " +
+              "baseImage: \(UserAssetManager.shared.baseImageURL != nil), " +
+              "reactionImage: \(UserAssetManager.shared.reactionImageURL != nil), " +
+              "audio: \(UserAssetManager.shared.audioURL != nil)")
+
         // Phase 2a: instantiate the input lock manager at launch.
         // Held for the app lifetime; install() is called when ward activates.
         inputLockManager = InputLockManager()
