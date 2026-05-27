@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Platform: macOS Tahoe 26+](https://img.shields.io/badge/platform-macOS%20Tahoe%2026+-lightgrey.svg?style=flat-square)](https://developer.apple.com/macos/)
 
-![Wardlume Hero](https://raw.githubusercontent.com/arpitagarwal1301/wardlume/main/.github/assets/wardlume-hero.gif)
+![Wardlume Hero](https://github.com/arpitagarwal1301/wardlume/blob/main/.github/assets/wardlume-hero.gif)
 
 With the rise of autonomous AI coding agents like Claude Code and Cursor,
 developers frequently leave their machines running complex, long-running tasks
