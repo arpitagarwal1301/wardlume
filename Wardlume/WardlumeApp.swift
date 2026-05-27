@@ -9,9 +9,15 @@ import SwiftUI
 
 @main
 struct WardlumeApp: App {
+    // Links our SwiftUI App lifecycle with AppKit's AppDelegate.
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        // Using a Settings scene instead of WindowGroup prevents a window from spawning at startup.
+        Settings {
+            EmptyView()
         }
     }
 }
+
+
