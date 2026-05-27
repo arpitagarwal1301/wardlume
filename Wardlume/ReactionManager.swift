@@ -85,6 +85,11 @@ final class ReactionManager: ObservableObject {
         }
     }
 
+    /// Phase 3b: All available packs (built-in + user packs).
+    /// Updated automatically when PackLoader.userPacks changes via Combine subscription.
+    /// PreferencesView binds to this instead of calling ReactionPack.all directly.
+    @Published private(set) var availablePacks: [ReactionPack] = []
+
     // -------------------------------------------------------------------------
     // MARK: — Private state
     // -------------------------------------------------------------------------
@@ -131,6 +136,9 @@ final class ReactionManager: ObservableObject {
     /// Scheduled work item that resets intrusionCount after 15 s of no activity.
     private var counterResetWorkItem: DispatchWorkItem?
 
+    /// Phase 3b: Combine subscriptions for observing PackLoader changes.
+    private var cancellables = Set<AnyCancellable>()
+
     // -------------------------------------------------------------------------
     // MARK: — Initialization
     // -------------------------------------------------------------------------
@@ -170,6 +178,24 @@ final class ReactionManager: ObservableObject {
         } else {
             self.cooldown = 5.0
         }
+
+        // Phase 3b: Subscribe to PackLoader.userPacks changes
+        // When a pack is imported via drag-and-drop, PackLoader.refreshUserPacks()
+        // updates @Published userPacks, this sink fires, and availablePacks is
+        // reassigned with the new pack included. PreferencesView's picker updates
+        // automatically via its binding to reactionManager.availablePacks.
+        PackLoader.shared.$userPacks
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.availablePacks = ReactionPack.all
+            }
+            .store(in: &cancellables)
+
+        // Phase 3b: Initialize availablePacks after subscription is set up.
+        // At this point PackLoader.shared.userPacks is already populated by
+        // AppDelegate's discoverUserPacks() call, so ReactionPack.all includes
+        // both built-in and user packs.
+        self.availablePacks = ReactionPack.all
     }
 
     // -------------------------------------------------------------------------
@@ -233,6 +259,21 @@ final class ReactionManager: ObservableObject {
         dismissWorkItem?.cancel()
         dismissWorkItem = nil
         tearDownReactionWindow()
+    }
+
+    /// Phase 3b: Import a pack folder via drag-and-drop.
+    ///
+    /// Delegates to PackLoader.shared.importPack(at:), which validates the pack,
+    /// copies it to the sandboxed packs directory, and triggers a refresh.
+    /// The Combine subscription in init() automatically updates availablePacks
+    /// when PackLoader.userPacks changes, so the picker updates live.
+    ///
+    /// - Parameter sourceURL: The dragged folder URL (may be outside the sandbox).
+    /// - Returns: The imported ReactionPack instance (with destination URLs).
+    /// - Throws: PackLoaderError with a specific case for each failure mode.
+    @discardableResult
+    func importPack(at sourceURL: URL) throws -> ReactionPack {
+        try PackLoader.shared.importPack(at: sourceURL)
     }
 
     // -------------------------------------------------------------------------

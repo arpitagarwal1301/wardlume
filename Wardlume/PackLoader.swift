@@ -39,6 +39,7 @@
 //  ────────────────────────────────────────────────────────────────────────────
 
 import AppKit
+import Combine
 
 // ---------------------------------------------------------------------------
 // MARK: — PackLoaderError
@@ -73,6 +74,15 @@ enum PackLoaderError: Error, LocalizedError {
     /// audio is always optional.
     case referencedAssetMissing(filename: String)
 
+    /// Phase 3b: The source URL is a file, not a directory.
+    case notADirectory
+
+    /// Phase 3b: A folder with this name already exists in the packs directory.
+    case destinationFolderExists(name: String)
+
+    /// Phase 3b: The pack folder could not be copied to the packs directory.
+    case copyFailed(underlying: Error)
+
     // Human-readable descriptions used in console logs and (Phase 3b) alert text.
     var errorDescription: String? {
         switch self {
@@ -90,15 +100,29 @@ enum PackLoaderError: Error, LocalizedError {
             return "id '\(id)' is already used by a built-in or previously loaded pack"
         case .referencedAssetMissing(let filename):
             return "referenced asset '\(filename)' not found in pack folder"
+        case .notADirectory:
+            return "source URL is a file, not a folder"
+        case .destinationFolderExists(let name):
+            return "a folder named '\(name)' already exists in the packs directory; rename your source folder and try again"
+        case .copyFailed(let err):
+            return "could not copy pack folder: \(err.localizedDescription)"
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// MARK: — PackLoaderError + Identifiable
+// ---------------------------------------------------------------------------
+
+extension PackLoaderError: Identifiable {
+    var id: String { errorDescription ?? String(describing: self) }
 }
 
 // ---------------------------------------------------------------------------
 // MARK: — PackLoader
 // ---------------------------------------------------------------------------
 
-final class PackLoader {
+final class PackLoader: ObservableObject {
 
     // ── Singleton ─────────────────────────────────────────────────────────────
 
@@ -109,7 +133,8 @@ final class PackLoader {
 
     /// User packs successfully loaded at last discoverUserPacks() call.
     /// Empty on launch until discoverUserPacks() runs.
-    private(set) var userPacks: [ReactionPack] = []
+    /// Phase 3b: @Published so ReactionManager can subscribe and update its picker.
+    @Published private(set) var userPacks: [ReactionPack] = []
 
     // ── Public API ────────────────────────────────────────────────────────────
 
@@ -152,6 +177,111 @@ final class PackLoader {
     /// On any I/O error (e.g. disk full, permissions), logs the failure and
     /// leaves userPacks empty — the app continues with built-in packs only.
     func discoverUserPacks() {
+        performDiscovery()
+    }
+
+    /// Phase 3b: Re-scans the user packs directory after a drag-and-drop import.
+    ///
+    /// Called after importPack() successfully copies a new pack folder.
+    /// The @Published userPacks assignment triggers ReactionManager's Combine
+    /// subscription, which updates availablePacks and refreshes the picker.
+    func refreshUserPacks() {
+        performDiscovery()
+    }
+
+    /// Phase 3b: Validates and imports a pack folder via drag-and-drop.
+    ///
+    /// - Parameter sourceURL: The dragged folder URL (may be outside the sandbox).
+    /// - Returns: The imported ReactionPack instance (with destination URLs).
+    /// - Throws: PackLoaderError with a specific case for each failure mode.
+    ///
+    /// Flow:
+    ///   1. Start security-scoped resource access (defer stop)
+    ///   2. Verify sourceURL is a directory
+    ///   3. Get (and create) userPacksDirectory()
+    ///   4. Check destination doesn't already exist
+    ///   5. Validate pack at source (loadPack with alreadyLoaded: userPacks)
+    ///   6. Copy folder to destination
+    ///   7. refreshUserPacks() — @Published fires, chain updates
+    ///   8. Return pack from refreshed userPacks (destination URLs)
+    @discardableResult
+    func importPack(at sourceURL: URL) throws -> ReactionPack {
+        // ── Diagnostic logging ────────────────────────────────────────────────
+        print("Wardlume [PackLoader]: importPack called with URL: \(sourceURL)")
+        print("Wardlume [PackLoader]: URL path: \(sourceURL.path)")
+        print("Wardlume [PackLoader]: URL isFileURL: \(sourceURL.isFileURL)")
+        print("Wardlume [PackLoader]: URL isDirectory check: \((try? sourceURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false)")
+        
+        // ── 1. Security-scoped resource access ────────────────────────────────
+        // Attempt to start security-scoped access. If it returns false, the URL
+        // may still be accessible via existing sandbox entitlements (e.g.,
+        // com.apple.security.files.user-selected.read-only for user-dragged items).
+        // We log the result for diagnostics but continue regardless — let the
+        // actual file operations determine reachability.
+        let didStart = sourceURL.startAccessingSecurityScopedResource()
+        print("Wardlume [PackLoader]: security-scoped access \(didStart ? "granted" : "not required or unavailable")")
+        
+        defer {
+            if didStart {
+                sourceURL.stopAccessingSecurityScopedResource()
+                print("Wardlume [PackLoader]: stopped security-scoped access")
+            }
+        }
+
+        print("Wardlume [PackLoader]: FileManager.fileExists at path: \(FileManager.default.fileExists(atPath: sourceURL.path))")
+
+        // ── 2. Verify sourceURL is a directory ────────────────────────────────
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: sourceURL.path, isDirectory: &isDir),
+              isDir.boolValue else {
+            throw PackLoaderError.notADirectory
+        }
+
+        // ── 3. Get userPacksDirectory ─────────────────────────────────────────
+        let packsDir = try userPacksDirectory()
+
+        // ── 4. Compute destination and check it doesn't exist ─────────────────
+        let folderName = sourceURL.lastPathComponent
+        let destination = packsDir.appendingPathComponent(folderName, isDirectory: true)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            throw PackLoaderError.destinationFolderExists(name: folderName)
+        }
+
+        // ── 5. Validate pack at source ────────────────────────────────────────
+        // loadPack throws PackLoaderError on any validation failure.
+        // alreadyLoaded: userPacks ensures ID collision detection includes
+        // existing user packs (not just built-ins).
+        let validatedPack = try loadPack(at: sourceURL, alreadyLoaded: userPacks)
+
+        // ── 6. Copy folder to destination ─────────────────────────────────────
+        do {
+            try FileManager.default.copyItem(at: sourceURL, to: destination)
+        } catch {
+            throw PackLoaderError.copyFailed(underlying: error)
+        }
+
+        print("Wardlume [PackLoader]: imported pack '\(validatedPack.id)' to '\(folderName)'")
+
+        // ── 7. Refresh user packs ─────────────────────────────────────────────
+        // @Published userPacks assignment triggers ReactionManager's subscription.
+        refreshUserPacks()
+
+        // ── 8. Return pack from refreshed userPacks ───────────────────────────
+        // Prefer the freshly-loaded instance (destination URLs) over the
+        // validated one (source URLs). Fall back to validatedPack if refresh
+        // somehow misses it (shouldn't happen in practice).
+        return userPacks.first(where: { $0.id == validatedPack.id }) ?? validatedPack
+    }
+
+    // ── Private: discovery ────────────────────────────────────────────────────
+
+    /// Phase 3b DRY refactor: shared scan logic for discoverUserPacks() and
+    /// refreshUserPacks().
+    ///
+    /// Scans the user packs directory, loads valid packs, and reassigns userPacks.
+    /// On any I/O error, logs the failure and leaves userPacks empty (or unchanged
+    /// if this is a refresh call after a successful import).
+    private func performDiscovery() {
         let packsDir: URL
         do {
             packsDir = try userPacksDirectory()
@@ -203,16 +333,6 @@ final class PackLoader {
 
         userPacks = loaded
         print("Wardlume [PackLoader]: discovered \(loaded.count) user pack(s)")
-    }
-
-    /// Phase 3b stub. Called after a successful drag-and-drop import.
-    ///
-    /// Currently a no-op. Phase 3b will re-run discovery, merge results with
-    /// existing userPacks, and notify observers (likely via @Published on
-    /// ReactionManager or a dedicated @Published property here) so the
-    /// Preferences picker updates live without a relaunch.
-    func refreshUserPacks() {
-        // TODO Phase 3b: re-run discovery, publish change
     }
 
     // ── Private: pack loading ─────────────────────────────────────────────────

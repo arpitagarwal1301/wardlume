@@ -11,16 +11,20 @@
 //  Settings persist to UserDefaults via ReactionManager's didSet observers.
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct PreferencesView: View {
     @ObservedObject var reactionManager: ReactionManager
+    
+    @State private var isTargeted: Bool = false
+    @State private var importError: PackLoaderError? = nil
     
     var body: some View {
         Form {
             // ── Active Pack Selection ─────────────────────────────────────────
             Section {
                 Picker("Active Reaction Pack", selection: $reactionManager.activePackID) {
-                    ForEach(ReactionPack.all, id: \.id) { pack in
+                    ForEach(reactionManager.availablePacks, id: \.id) { pack in
                         Text(pack.name).tag(pack.id)
                     }
                 }
@@ -68,7 +72,80 @@ struct PreferencesView: View {
                         .foregroundColor(.secondary)
                 }
             }
+            
+            // ── Drag-and-Drop Import Zone ─────────────────────────────────────
+            Section {
+                ZStack {
+                    // Background fill
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isTargeted ? Color.accentColor.opacity(0.1) : Color.clear)
+                    
+                    // Dashed border overlay
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(
+                            isTargeted ? Color.accentColor : Color.secondary,
+                            style: StrokeStyle(lineWidth: 1.5, dash: [6])
+                        )
+                    
+                    // Content
+                    VStack(spacing: 12) {
+                        Image(systemName: "arrow.down.circle")
+                            .font(.title2)
+                            .foregroundColor(isTargeted ? .accentColor : .secondary)
+                        
+                        Text("Drop pack folder here to install")
+                            .font(.body)
+                            .foregroundColor(isTargeted ? .accentColor : .secondary)
+                    }
+                    .padding(.vertical, 24)
+                }
+                .frame(height: 80)
+                .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
+                    guard let provider = providers.first else { return false }
+                    
+                    _ = provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier,
+                                          options: nil) { item, error in
+                        var resolvedURL: URL?
+                        if let url = item as? URL {
+                            resolvedURL = url
+                        } else if let data = item as? Data,
+                                  let url = URL(dataRepresentation: data, relativeTo: nil) {
+                            resolvedURL = url
+                        }
+                        
+                        guard let url = resolvedURL else {
+                            DispatchQueue.main.async {
+                                importError = .copyFailed(
+                                    underlying: error ?? NSError(domain: "Wardlume",
+                                                                 code: -1,
+                                                                 userInfo: [NSLocalizedDescriptionKey:
+                                                                            "could not load dropped item URL"]))
+                            }
+                            return
+                        }
+                        
+                        DispatchQueue.main.async {
+                            do {
+                                try reactionManager.importPack(at: url)
+                            } catch let error as PackLoaderError {
+                                importError = error
+                            } catch {
+                                importError = .copyFailed(underlying: error)
+                            }
+                        }
+                    }
+                    
+                    return true
+                }
+            }
         }
         .padding()
+        .alert(item: $importError) { error in
+            Alert(
+                title: Text("Import Failed"),
+                message: Text(error.errorDescription ?? "An unknown error occurred."),
+                dismissButton: .default(Text("OK"))
+            )
+        }
     }
 }
