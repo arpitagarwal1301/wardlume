@@ -7,6 +7,7 @@
 
 import MetalKit
 import QuartzCore
+import AppKit
 
 // ---------------------------------------------------------------------------
 // ShaderParams — must match the struct in WardShader.metal byte-for-byte.
@@ -24,6 +25,7 @@ struct ShaderParams {
     // Phase 2a: shader time of the last intercepted input event.
     // Default -9999 → pulseAge >> 0.20 s → pulseMult = 1.0 → no burst at startup.
     var lastIntrusionT:   Float = -9999.0
+    var reduceMotion:     Float = 0.0    // 1.0 = enabled, 0.0 = disabled
 }
 
 // ---------------------------------------------------------------------------
@@ -63,9 +65,48 @@ class MetalOverlayView: MTKView {
         super.init(frame: frame, device: device)
         configureSurface()
         buildPipeline()
+        setupReduceMotionObserver()
     }
 
     required init(coder: NSCoder) { fatalError("init(coder:) not used") }
+
+    deinit {
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
+    }
+
+    private func setupReduceMotionObserver() {
+        updateReduceMotionSettings()
+
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(accessibilitySettingsChanged),
+            name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil
+        )
+    }
+
+    @objc private func accessibilitySettingsChanged(_ notification: Notification) {
+        updateReduceMotionSettings()
+    }
+
+    private func updateReduceMotionSettings() {
+        let shouldReduce = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        
+        // Single inline comment explaining chosen values:
+        // Ripples are fully disabled (rippleStrength=0) to prevent background distortion waves.
+        // Breathing pulse (shimmerIntensity) drops to near-zero (0.01) so it is barely perceptible.
+        // The flowing border runs at full speed to maintain the core visual identity of the app.
+        if shouldReduce {
+            params.reduceMotion = 1.0
+            params.rippleStrength = 0.0
+            params.shimmerIntensity = 0.01
+        } else {
+            params.reduceMotion = 0.0
+            params.rippleStrength = 0.018
+            params.shimmerIntensity = 0.18
+        }
+        print("Wardlume Reduce Motion state: \(shouldReduce) (rippleStrength=\(params.rippleStrength), shimmerIntensity=\(params.shimmerIntensity))")
+    }
 
     // ---------------------------------------------------------------------------
     // MARK: — Surface configuration
