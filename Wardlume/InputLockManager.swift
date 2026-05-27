@@ -97,6 +97,17 @@ final class InputLockManager: NSObject {
     /// events our head-insert read-write tap consumes.
     nonisolated(unsafe) var onUnlockHotkey: (() -> Void)?
 
+    /// Called (on the main thread) when an input event is consumed as an intrusion.
+    /// Set by AppDelegate to invoke ReactionManager.trigger().
+    ///
+    /// This fires AFTER the border-pulse debounce check but is NOT gated on that
+    /// same debounce — ReactionManager owns its own cooldown. Both signals fire
+    /// independently because they serve different purposes:
+    ///   • Border pulse  → visual shader feedback for the ward *owner* (max 1 per 500 ms).
+    ///   • onIntrusion   → punitive reaction overlay for the *intruder* (max 1 per cooldown).
+    /// Conflating the two clocks would make changing one silently break the other.
+    nonisolated(unsafe) var onIntrusion: (() -> Void)?
+
     // -------------------------------------------------------------------------
     // MARK: — Permission helpers
     // -------------------------------------------------------------------------
@@ -375,7 +386,7 @@ final class InputLockManager: NSObject {
             }
         }
 
-        // ── Step 4: Intrusion pulse + consume ─────────────────────────────────
+        // ── Step 4: Intrusion pulse + consume ─────────────────────────────────────
         // Event failed all whitelist checks — it lands on the locked desktop.
         // Fire the debounced visual pulse (max once per 500 ms) and discard.
         let now = CACurrentMediaTime()
@@ -383,6 +394,16 @@ final class InputLockManager: NSObject {
             lastIntrusionWall = now
             v.intrusionTime = v.params.time
         }
+
+        // Fire the reaction callback. This is NOT gated on lastIntrusionWall —
+        // ReactionManager owns its own cooldown (default 5 s) and will decide
+        // independently whether to show a reaction. The border pulse above is
+        // capped at 500 ms for shader-stability reasons; that constraint must
+        // not bleed into the reaction layer.
+        // We are on the main run loop thread (CGEventTap callback), so calling
+        // onIntrusion directly — which ultimately calls ReactionManager.trigger()
+        // (@MainActor-compatible) — requires no dispatch.
+        onIntrusion?()
 
         return nil   // consume — event is silently discarded
     }

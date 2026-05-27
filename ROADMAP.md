@@ -15,6 +15,10 @@
 - [ ] Menu bar dropdown items don't fire while ward is active — see SAFETY_NOTES
 - [ ] "Unlock with Touch ID..." accessible without keyboard
 - [ ] NSWindow makeKeyWindow warning at activation (cosmetic console noise)
+- [ ] Investigate `_NSDetectedLayoutRecursion` warning when reaction overlay
+      first appears (logged once per session, no functional impact, likely
+      resolves itself when placeholder NSView is replaced with real pack
+      content in Phase 2.5b)
 
 ## v1.5 — Defensive Reaction Modes
 

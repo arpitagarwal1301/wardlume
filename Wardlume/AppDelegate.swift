@@ -18,6 +18,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     /// appears; uninstalled before the window closes.
     var inputLockManager: InputLockManager?
 
+    /// Phase 2.5a: owns the reaction overlay lifecycle. Created once at launch
+    /// and held for the app's lifetime so its cooldown clock survives
+    /// activate/deactivate cycles (never reset to nil on ward toggle).
+    var reactionManager: ReactionManager?
+
     // -------------------------------------------------------------------------
     // MARK: — Application launch
     // -------------------------------------------------------------------------
@@ -106,6 +111,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 #endif
 
         statusBarItem?.menu = menu
+
+        // Phase 2.5a: instantiate the reaction engine at launch.
+        // Held for the app lifetime; see property declaration above.
+        reactionManager = ReactionManager()
     }
 
     // -------------------------------------------------------------------------
@@ -117,6 +126,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             // --- Deactivate: stop input lock → stop capture → close window ---
             inputLockManager?.uninstall()
             inputLockManager = nil
+
+            // Dismiss any live reaction overlay immediately. Must happen before
+            // window.close() so no stale overlay outlives the ward session.
+            reactionManager?.dismissReaction()
 
             captureManager?.stopCapture()
             captureManager = nil
@@ -206,6 +219,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             // because global NSEvent monitors are listen-only taps that never see events
             // our head-insert read-write tap consumes. See InputLockManager.swift lines 84-90.
             lock.onUnlockHotkey = { [weak self] in self?.unlockWithBiometrics() }
+
+            // Phase 2.5a: wire intrusion events to the reaction engine.
+            // ReactionManager.trigger() enforces its own cooldown — this fires
+            // on every consumed event regardless of the border-pulse debounce.
+            lock.onIntrusion = { [weak self] in self?.reactionManager?.trigger() }
         }
     }
 
@@ -271,6 +289,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
     @objc func quitApp() {
         inputLockManager?.uninstall()
+        reactionManager?.dismissReaction()  // clear any live overlay before exit
         captureManager?.stopCapture()
         NSApp.terminate(nil)
     }
