@@ -64,6 +64,13 @@ final class InputLockManager: NSObject {
     /// whitelisted so our own UI remains reachable while the ward is active.
     nonisolated(unsafe) private var wardWindowID: CGWindowID = 0
 
+    /// CGWindowID of the active reaction overlay window (if any).
+    /// Set by ReactionManager when a reaction window is created/destroyed.
+    /// Treated identically to wardWindowID in the whitelist iteration —
+    /// events that fall on this window are consumed, not passed through.
+    /// Updated on the main thread; nonisolated(unsafe) for callback access.
+    nonisolated(unsafe) var reactionWindowID: CGWindowID?
+
     /// Wardlume's process ID, used to identify our windows via CGWindowListCopyWindowInfo
     /// without touching @MainActor-isolated NSApp.windows from a nonisolated context.
     nonisolated(unsafe) private var wardlumePID: pid_t = 0
@@ -182,6 +189,25 @@ final class InputLockManager: NSObject {
             (1 << CGEventType.otherMouseDragged.rawValue) |
             (1 << CGEventType.scrollWheel.rawValue)
 
+        // ── DIAGNOSTIC: Print event mask and decoded types ────────────────────
+        print("Wardlume [InputLockManager]: event mask = 0x\(String(mask, radix: 16))")
+        let allTypes: [(String, CGEventType)] = [
+            ("keyDown", .keyDown), ("keyUp", .keyUp), ("flagsChanged", .flagsChanged),
+            ("leftMouseDown", .leftMouseDown), ("leftMouseUp", .leftMouseUp),
+            ("leftMouseDragged", .leftMouseDragged),
+            ("rightMouseDown", .rightMouseDown), ("rightMouseUp", .rightMouseUp),
+            ("rightMouseDragged", .rightMouseDragged),
+            ("mouseMoved", .mouseMoved), ("scrollWheel", .scrollWheel),
+            ("otherMouseDown", .otherMouseDown), ("otherMouseUp", .otherMouseUp),
+            ("otherMouseDragged", .otherMouseDragged),
+            ("tapDisabledByTimeout", .tapDisabledByTimeout),
+            ("tapDisabledByUserInput", .tapDisabledByUserInput)
+        ]
+        for (name, type) in allTypes {
+            let isIncluded = (mask & (1 << type.rawValue)) != 0
+            print("Wardlume [InputLockManager]:   \(name) (\(type.rawValue)) = \(isIncluded ? "✅" : "❌")")
+        }
+
         // passUnretained: AppDelegate holds a strong reference to this object
         // for the entire lifetime of an active ward session.
         let refcon = Unmanaged.passUnretained(self).toOpaque()
@@ -252,12 +278,17 @@ final class InputLockManager: NSObject {
                                   type: CGEventType,
                                   event: CGEvent) -> Unmanaged<CGEvent>? {
 
+        // ── DIAGNOSTIC: Log every event the callback sees ─────────────────────
+        let loc = event.location
+        print("Wardlume [InputLockManager]: 👁️ event type=\(type.rawValue) at (\(loc.x), \(loc.y))")
+
         // ── Step 1: Tap-disabled re-enable ────────────────────────────────────
         // macOS can disable the tap if the callback is too slow.
         // Re-enabling here keeps the lock active across any transient hiccups.
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            print("Wardlume [InputLockManager]: ⚠️ TAP DISABLED type=\(type.rawValue), re-enabling")
             if let tap = tapRef { CGEvent.tapEnable(tap: tap, enable: true) }
-            return nil
+            return Unmanaged.passUnretained(event)
         }
 
         // ── Step 2: Cmd+Shift+W escape hotkey ────────────────────────────────
@@ -275,17 +306,24 @@ final class InputLockManager: NSObject {
             let flags   = event.flags
             if keycode == 13 &&
                flags.contains(.maskCommand) && flags.contains(.maskShift) {
-                // We are on the main thread (main run loop callback), so calling
-                // onEscapeHotkey — which ultimately calls AppDelegate.toggleWard()
-                // (@MainActor) — is safe without dispatch.
-                onEscapeHotkey?()
+                // Dispatch async to avoid blocking the tap callback with heavy work
+                // (ward destruction, window cleanup).
+                if let cb = onEscapeHotkey {
+                    DispatchQueue.main.async { cb() }
+                }
+                print("Wardlume [InputLockManager]: 🔴 CONSUMING type=\(type.rawValue) (Cmd+Shift+W escape hotkey)")
                 return nil   // consume the keystroke; apps underneath don't see it
             }
 
             // Keycode 32 = the 'U' physical key on standard keyboard layouts.
             if keycode == 32 &&
                flags.contains(.maskCommand) && flags.contains(.maskShift) {
-                onUnlockHotkey?()
+                // Dispatch async to avoid blocking the tap callback with heavy work
+                // (Touch ID prompt, biometric evaluation).
+                if let cb = onUnlockHotkey {
+                    DispatchQueue.main.async { cb() }
+                }
+                print("Wardlume [InputLockManager]: 🔴 CONSUMING type=\(type.rawValue) (Cmd+Shift+U unlock hotkey)")
                 return nil
             }
         }
@@ -310,8 +348,6 @@ final class InputLockManager: NSObject {
         // If we ever switch to NSWindow.frame, the conversion is:
         //   appKitY = cachedScreenHeight − event.location.y
 
-        let loc = event.location   // Quartz coords throughout this block
-
         // ── Fast path: menu bar strip ─────────────────────────────────────────
         // Passes through mouse/scroll events in the top strip so the status-bar
         // icon stays clickable. Quartz y < menuBarThreshold = near the top of
@@ -323,6 +359,7 @@ final class InputLockManager: NSObject {
                       type == .rightMouseDragged || type == .otherMouseDragged
 
         if (isMouse || isMove) && loc.y < menuBarThreshold {
+            print("Wardlume [InputLockManager]: 🟢 PASSING (whitelist: menu bar strip) type=\(type.rawValue)")
             return Unmanaged.passRetained(event)
         }
 
@@ -370,14 +407,19 @@ final class InputLockManager: NSObject {
                 // Found a window at this screen position.
                 if pid == wardlumePID {
                     // This is a Wardlume window.
-                    if wid != wardWindowID {
-                        // It's NOT the ward overlay (e.g., menu dropdown, alert).
+                    print("Wardlume [InputLockManager]: 🔍 Checking Wardlume window wid=\(wid) (wardWindowID=\(wardWindowID), reactionWindowID=\(reactionWindowID?.description ?? "nil"))")
+                    if wid == wardWindowID || wid == reactionWindowID {
+                        // It IS the ward overlay or reaction overlay. Continue
+                        // checking — there might be another Wardlume window
+                        // (like a menu dropdown) underneath.
+                        print("Wardlume [InputLockManager]: ⚫️ SKIPPING ward/reaction window wid=\(wid), continuing search")
+                        continue
+                    } else {
+                        // It's NOT the ward or reaction overlay (e.g., menu dropdown, alert).
                         // Whitelist it — let the event through.
+                        print("Wardlume [InputLockManager]: 🟢 PASSING (whitelist: Wardlume window wid=\(wid)) type=\(type.rawValue)")
                         return Unmanaged.passRetained(event)
                     }
-                    // It IS the ward overlay. Continue checking — there might be
-                    // another Wardlume window (like a menu dropdown) underneath.
-                    continue
                 } else {
                     // This is NOT a Wardlume window. The click landed on another
                     // app's window or the desktop. Stop searching — consume.
@@ -400,11 +442,13 @@ final class InputLockManager: NSObject {
         // independently whether to show a reaction. The border pulse above is
         // capped at 500 ms for shader-stability reasons; that constraint must
         // not bleed into the reaction layer.
-        // We are on the main run loop thread (CGEventTap callback), so calling
-        // onIntrusion directly — which ultimately calls ReactionManager.trigger()
-        // (@MainActor-compatible) — requires no dispatch.
-        onIntrusion?()
+        // Dispatch async to avoid blocking the tap callback with heavy work
+        // (NSWindow creation, Metal compositor warmup on first trigger).
+        if let cb = onIntrusion {
+            DispatchQueue.main.async { cb() }
+        }
 
+        print("Wardlume [InputLockManager]: 🔴 CONSUMING type=\(type.rawValue)")
         return nil   // consume — event is silently discarded
     }
 }

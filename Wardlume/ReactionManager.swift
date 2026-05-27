@@ -37,6 +37,7 @@
 
 import AppKit
 import AVFoundation
+import Combine
 
 // ---------------------------------------------------------------------------
 // MARK: — ReactionManager
@@ -48,7 +49,7 @@ import AVFoundation
 ///   1. Instantiate once in AppDelegate.applicationDidFinishLaunching.
 ///   2. Wire InputLockManager.onIntrusion → reactionManager.trigger().
 ///   3. Call dismissReaction() on any ward-deactivation path.
-final class ReactionManager {
+final class ReactionManager: ObservableObject {
 
     // -------------------------------------------------------------------------
     // MARK: — Configuration (settable from Phase 2.5c settings UI)
@@ -56,20 +57,40 @@ final class ReactionManager {
 
     /// Minimum time between consecutive reactions (seconds). Default 5 s.
     /// Phase 2.5c settings will expose a 1 / 3 / 5 / 10 s picker.
-    var cooldown: TimeInterval = 5.0
+    @Published var cooldown: TimeInterval = 5.0 {
+        didSet {
+            UserDefaults.standard.set(cooldown, forKey: "wardlume.cooldown")
+        }
+    }
 
     /// The pack that fires on the next trigger(). Default: Silent Professional —
     /// the only pack guaranteed to render without any bundle asset files.
     /// Phase 2.5c settings will persist this choice via UserDefaults.
-    var activePackID: String = ReactionPack.silentProfessional.id
+    @Published var activePackID: String = ReactionPack.silentProfessional.id {
+        didSet {
+            UserDefaults.standard.set(activePackID, forKey: "wardlume.activePackID")
+        }
+    }
 
     /// When true, plays the pack's audio file (if it exists in the bundle).
     /// Default OFF — toggled by the Phase 2.5c audio toggle / debug menu item.
-    var audioEnabled: Bool = false
+    @Published var audioEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(audioEnabled, forKey: "wardlume.audioEnabled")
+            // Requirement 4.8: Stop audio immediately when toggle is disabled
+            if !audioEnabled {
+                audioPlayer?.stop()
+                audioPlayer = nil
+            }
+        }
+    }
 
     // -------------------------------------------------------------------------
     // MARK: — Private state
     // -------------------------------------------------------------------------
+
+    /// Valid cooldown values for segmented control (Requirement 5.8)
+    static let validCooldowns: [Double] = [1.0, 3.0, 5.0, 10.0]
 
     /// Timestamp of the last successfully fired reaction.
     /// Compared against Date() to enforce the cooldown.
@@ -88,6 +109,11 @@ final class ReactionManager {
     /// Nilled out in tearDownReactionWindow() to stop audio on early dismiss.
     private var audioPlayer: AVAudioPlayer?
 
+    /// Set by AppDelegate at wire-up time. Used to inform the input lock
+    /// which reaction window is currently on screen so it can be consumed
+    /// rather than whitelisted.
+    weak var inputLockManager: InputLockManager?
+
     // ── Intrusion attempt counter ─────────────────────────────────────────────
     //
     // Tracks how many intrusion events have fired since the last 15-second
@@ -104,6 +130,47 @@ final class ReactionManager {
 
     /// Scheduled work item that resets intrusionCount after 15 s of no activity.
     private var counterResetWorkItem: DispatchWorkItem?
+
+    // -------------------------------------------------------------------------
+    // MARK: — Initialization
+    // -------------------------------------------------------------------------
+
+    /// Returns the closest valid cooldown value to the given value.
+    ///
+    /// Valid cooldowns are 1.0, 3.0, 5.0, and 10.0 seconds. This method finds
+    /// the value with the minimum absolute difference from the input.
+    private static func closestValidCooldown(_ value: Double) -> Double {
+        return validCooldowns.min(by: { abs($0 - value) < abs($1 - value) }) ?? 5.0
+    }
+
+    /// Initialize ReactionManager with settings restored from UserDefaults.
+    ///
+    /// Settings are validated and reset to defaults if corrupted or invalid:
+    /// - activePackID: Must exist in ReactionPack.all, defaults to silentProfessional
+    /// - audioEnabled: Defaults to false if not set
+    /// - cooldown: Must be > 0, snapped to closest valid value (1.0, 3.0, 5.0, 10.0)
+    init() {
+        // Restore activePackID with validation
+        if let savedPackID = UserDefaults.standard.string(forKey: "wardlume.activePackID") {
+            if ReactionPack.all.contains(where: { $0.id == savedPackID }) {
+                self.activePackID = savedPackID
+            } else {
+                print("Wardlume [ReactionManager]: Invalid saved pack ID '\(savedPackID)', defaulting to silentProfessional")
+                self.activePackID = ReactionPack.silentProfessional.id
+            }
+        }
+        
+        // Restore audioEnabled (default false if not set)
+        self.audioEnabled = UserDefaults.standard.bool(forKey: "wardlume.audioEnabled")
+        
+        // Restore cooldown with closest-valid-value logic (Requirement 5.8)
+        let savedCooldown = UserDefaults.standard.double(forKey: "wardlume.cooldown")
+        if savedCooldown > 0 {
+            self.cooldown = Self.closestValidCooldown(savedCooldown)
+        } else {
+            self.cooldown = 5.0
+        }
+    }
 
     // -------------------------------------------------------------------------
     // MARK: — Public API
@@ -139,6 +206,22 @@ final class ReactionManager {
         print(String(format: "Wardlume [ReactionManager]: triggered pack='%@' " +
                      "(cooldown remaining: 0.0s)", pack.id))
 
+        showReaction(pack: pack)
+    }
+
+    /// Trigger a reaction for preview purposes in the settings UI.
+    ///
+    /// Unlike trigger(), this method:
+    /// - Does NOT check cooldown (allows rapid consecutive previews)
+    /// - Does NOT update lastFiredAt (preview doesn't consume cooldown budget)
+    /// - Works even when ward is inactive
+    ///
+    /// Must be called on the main thread.
+    func triggerForPreview() {
+        let pack = ReactionPack.all.first(where: { $0.id == activePackID })
+                   ?? .silentProfessional
+        
+        print("Wardlume [ReactionManager]: preview triggered for pack='\(pack.id)'")
         showReaction(pack: pack)
     }
 
@@ -205,6 +288,10 @@ final class ReactionManager {
         window.makeKeyAndOrderFront(nil)
         reactionWindow = window
 
+        // Inform InputLockManager of the reaction window ID so it can be
+        // treated identically to the ward overlay (consumed, not whitelisted).
+        inputLockManager?.reactionWindowID = CGWindowID(window.windowNumber)
+
         // Log the reaction window ID so InputLockManager's whitelist can be
         // extended in a future phase if needed.
         let wid = CGWindowID(window.windowNumber)
@@ -227,6 +314,8 @@ final class ReactionManager {
 
     private func tearDownReactionWindow() {
         guard let window = reactionWindow else { return }
+        // Clear the reaction window ID from InputLockManager
+        inputLockManager?.reactionWindowID = nil
         // Stop any in-progress audio so it doesn't outlive the overlay window.
         audioPlayer?.stop()
         audioPlayer = nil

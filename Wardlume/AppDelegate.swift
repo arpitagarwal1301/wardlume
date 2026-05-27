@@ -14,14 +14,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     /// when it deactivates. Nil when the ward is off.
     var captureManager: DesktopCaptureManager?
 
-    /// Phase 2a: owns the CGEventTap lifecycle. Installed after the ward window
-    /// appears; uninstalled before the window closes.
+    /// Phase 2a: owns the CGEventTap lifecycle. Created once at launch and held
+    /// for the app's lifetime. install() is called when the ward activates;
+    /// uninstall() is called when it deactivates. The object itself persists
+    /// so reactionWindowID tracking works even when ward is inactive (for
+    /// triggerForPreview() in settings UI).
     var inputLockManager: InputLockManager?
 
     /// Phase 2.5a: owns the reaction overlay lifecycle. Created once at launch
     /// and held for the app's lifetime so its cooldown clock survives
     /// activate/deactivate cycles (never reset to nil on ward toggle).
     var reactionManager: ReactionManager?
+
+    /// Phase 2.5c: owns the preferences window lifecycle. Created on first
+    /// openPreferences() call and reused for subsequent opens.
+    var preferencesWindow: NSWindow?
 
     // -------------------------------------------------------------------------
     // MARK: — Application launch
@@ -79,6 +86,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
         menu.addItem(NSMenuItem.separator())
 
+        let preferencesItem = NSMenuItem(title: "Preferences...",
+                                         action: #selector(openPreferences),
+                                         keyEquivalent: ",")
+        preferencesItem.target = self
+        menu.addItem(preferencesItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         unlockMenuItem = NSMenuItem(title: "Unlock with Touch ID...",
                                     action: #selector(unlockWithBiometrics),
                                     keyEquivalent: "")
@@ -108,8 +123,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
                                   keyEquivalent: "")
         testItem.target = self
         menu.addItem(testItem)
+#endif
 
-        // ── Pack selector (Phase 2.5b — until Phase 2.5c settings UI exists) ──
+#if DEBUG
+        // ── Pack selector (Phase 2.5b — removed in Phase 2.5c) ────────────────
+        // These DEBUG menu items are replaced by the Preferences window.
+        // Wrapped in #if DEBUG to delete in release builds.
         menu.addItem(NSMenuItem.separator())
 
         let grumpyItem = NSMenuItem(title: "Set Pack: Grumpy Old Man",
@@ -141,9 +160,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
         statusBarItem?.menu = menu
 
+        // Phase 2a: instantiate the input lock manager at launch.
+        // Held for the app lifetime; install() is called when ward activates.
+        inputLockManager = InputLockManager()
+
         // Phase 2.5a: instantiate the reaction engine at launch.
         // Held for the app lifetime; see property declaration above.
         reactionManager = ReactionManager()
+
+        // Wire up the reaction manager to the input lock manager so reaction
+        // window IDs can be tracked (prevents reaction overlay from being
+        // whitelisted and leaking input to background apps).
+        reactionManager?.inputLockManager = inputLockManager
     }
 
     // -------------------------------------------------------------------------
@@ -154,7 +182,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         if let window = overlayWindow {
             // --- Deactivate: stop input lock → stop capture → close window ---
             inputLockManager?.uninstall()
-            inputLockManager = nil
 
             // Dismiss any live reaction overlay immediately. Must happen before
             // window.close() so no stale overlay outlives the ward session.
@@ -234,8 +261,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             // wardWindow is passed explicitly so the callback can exclude the
             // overlay surface from the Wardlume-window whitelist — events that
             // land on the ward overlay itself must still be consumed.
-            let lock = InputLockManager()
-            inputLockManager = lock
+            guard let lock = inputLockManager else { return }
             lock.install(view: metalView, wardWindow: window)
 
             // Escape hatch: Cmd+Shift+W deactivates the ward from anywhere.
@@ -270,6 +296,44 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     }
 
     // -------------------------------------------------------------------------
+    // MARK: — Preferences Window
+    // -------------------------------------------------------------------------
+
+    @objc func openPreferences() {
+        if let window = preferencesWindow {
+            // Window exists: bring to front
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        } else {
+            // Create new window
+            guard let reactionManager = reactionManager else { return }
+            let contentView = PreferencesView(reactionManager: reactionManager)
+            let hostingController = NSHostingController(rootView: contentView)
+            
+            // Let the hosting controller communicate SwiftUI's intrinsic size to the window
+            hostingController.sizingOptions = [.intrinsicContentSize]
+            
+            // Use contentViewController initializer so window sizes itself to content
+            let window = NSWindow(contentViewController: hostingController)
+            window.title = "Wardlume Preferences"
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            
+            // Set initial content size hint (larger than minimum for breathing room)
+            window.setContentSize(NSSize(width: 520, height: 450))
+            
+            // Minimum window frame size (includes ~28pt title bar, ensures 480×400 content area)
+            window.minSize = NSSize(width: 480, height: 428)
+            
+            window.center()
+            window.isReleasedWhenClosed = false
+            window.delegate = self
+            
+            preferencesWindow = window
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // MARK: — Menu Item Validation
     // -------------------------------------------------------------------------
 
@@ -279,6 +343,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         switch menuItem.action {
         case #selector(toggleWard),
              #selector(unlockWithBiometrics),
+             #selector(openPreferences),
              #selector(quitApp):
             return true
         #if DEBUG
@@ -339,10 +404,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     ///   3. Typing in other apps is blocked for the duration.
     @objc func testLock() {
         guard overlayWindow == nil,
-              InputLockManager.permissionsReady() else { return }
-
-        let lock = InputLockManager()
-        inputLockManager = lock
+              InputLockManager.permissionsReady(),
+              let lock = inputLockManager else { return }
 
         // Use a dummy (never-shown) NSWindow as the wardWindow so its windowNumber
         // is a valid but harmless CGWindowID for the whitelist exclusion check.
@@ -351,14 +414,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
         lock.onEscapeHotkey = { [weak self] in
             self?.inputLockManager?.uninstall()
-            self?.inputLockManager = nil
             print("Wardlume [DEBUG]: Cmd+Shift+W fired — test tap uninstalled.")
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
             guard let self, self.overlayWindow == nil else { return }
             self.inputLockManager?.uninstall()
-            self.inputLockManager = nil
             print("Wardlume [DEBUG]: 10 s elapsed — test tap uninstalled.")
         }
 
@@ -391,4 +452,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         print("Wardlume [DEBUG]: reaction audio \(rm.audioEnabled ? "ON" : "OFF")")
     }
 #endif
+}
+
+// -------------------------------------------------------------------------
+// MARK: — NSWindowDelegate
+// -------------------------------------------------------------------------
+
+extension AppDelegate: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        if notification.object as? NSWindow === preferencesWindow {
+            preferencesWindow = nil
+        }
+    }
 }
