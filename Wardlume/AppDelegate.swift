@@ -108,6 +108,35 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
                                   keyEquivalent: "")
         testItem.target = self
         menu.addItem(testItem)
+
+        // ── Pack selector (Phase 2.5b — until Phase 2.5c settings UI exists) ──
+        menu.addItem(NSMenuItem.separator())
+
+        let grumpyItem = NSMenuItem(title: "Set Pack: Grumpy Old Man",
+                                    action: #selector(debugSetPackGrumpy),
+                                    keyEquivalent: "")
+        grumpyItem.target = self
+        menu.addItem(grumpyItem)
+
+        let wizardItem = NSMenuItem(title: "Set Pack: Wizard",
+                                    action: #selector(debugSetPackWizard),
+                                    keyEquivalent: "")
+        wizardItem.target = self
+        menu.addItem(wizardItem)
+
+        let silentItem = NSMenuItem(title: "Set Pack: Silent Professional",
+                                    action: #selector(debugSetPackSilent),
+                                    keyEquivalent: "")
+        silentItem.target = self
+        menu.addItem(silentItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let audioItem = NSMenuItem(title: "Toggle Reaction Audio",
+                                   action: #selector(debugToggleAudio),
+                                   keyEquivalent: "")
+        audioItem.target = self
+        menu.addItem(audioItem)
 #endif
 
         statusBarItem?.menu = menu
@@ -253,7 +282,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
              #selector(quitApp):
             return true
         #if DEBUG
-        case #selector(testLock):
+        case #selector(testLock),
+             #selector(debugSetPackGrumpy),
+             #selector(debugSetPackWizard),
+             #selector(debugSetPackSilent),
+             #selector(debugToggleAudio):
             return true
         #endif
         default:
@@ -331,6 +364,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
         print("Wardlume [DEBUG]: test tap active for 10 s. " +
               "Try Cmd+Shift+W, the status-bar menu, and typing in other apps.")
+    }
+
+    // ── Pack selector helpers ─────────────────────────────────────────────────
+    // Temporary until Phase 2.5c adds the settings UI picker.
+    // Each method sets activePackID; the next trigger() picks up the change.
+
+    @objc func debugSetPackGrumpy() {
+        reactionManager?.activePackID = ReactionPack.grumpyOldMan.id
+        print("Wardlume [DEBUG]: active pack → grumpyOldMan")
+    }
+
+    @objc func debugSetPackWizard() {
+        reactionManager?.activePackID = ReactionPack.wizard.id
+        print("Wardlume [DEBUG]: active pack → wizard")
+    }
+
+    @objc func debugSetPackSilent() {
+        reactionManager?.activePackID = ReactionPack.silentProfessional.id
+        print("Wardlume [DEBUG]: active pack → silentProfessional")
+    }
+
+    @objc func debugToggleAudio() {
+        guard let rm = reactionManager else { return }
+        rm.audioEnabled.toggle()
+        print("Wardlume [DEBUG]: reaction audio \(rm.audioEnabled ? "ON" : "OFF")")
     }
 #endif
 }

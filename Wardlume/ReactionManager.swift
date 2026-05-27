@@ -36,45 +36,7 @@
 //  ────────────────────────────────────────────────────────────────────────────
 
 import AppKit
-import SwiftUI
-
-// ---------------------------------------------------------------------------
-// MARK: — ReactionPack
-// ---------------------------------------------------------------------------
-
-/// A single themed reaction bundle.
-///
-/// - `id`:        Stable identifier used for persistence (Phase 2.5c settings).
-/// - `name`:      Human-readable display name for the settings picker.
-/// - `imageName`: Name of an image asset in Assets.xcassets (nil = no image).
-/// - `audioName`: Name of a sound file in the app bundle (nil = silent).
-/// - `duration`:  How long the reaction overlay stays on screen before auto-dismiss.
-struct ReactionPack {
-    let id:        String
-    let name:      String
-    let imageName: String?
-    let audioName: String?
-    let duration:  TimeInterval
-}
-
-// ---------------------------------------------------------------------------
-// MARK: — Built-in packs
-// ---------------------------------------------------------------------------
-
-extension ReactionPack {
-    /// Phase 2.5a placeholder — solid red overlay with "WARD HOLDS" text.
-    /// Real image/audio packs are added in Phase 2.5b.
-    static let test = ReactionPack(
-        id:        "test",
-        name:      "Ward Holds (placeholder)",
-        imageName: nil,
-        audioName: nil,
-        duration:  2.0
-    )
-
-    /// All packs available to the settings picker. Extended in Phase 2.5b.
-    static let all: [ReactionPack] = [.test]
-}
+import AVFoundation
 
 // ---------------------------------------------------------------------------
 // MARK: — ReactionManager
@@ -96,9 +58,14 @@ final class ReactionManager {
     /// Phase 2.5c settings will expose a 1 / 3 / 5 / 10 s picker.
     var cooldown: TimeInterval = 5.0
 
-    /// The pack that fires on the next trigger(). Default: placeholder test pack.
-    /// Phase 2.5c settings will persist this via UserDefaults.
-    var activePackID: String = ReactionPack.test.id
+    /// The pack that fires on the next trigger(). Default: Silent Professional —
+    /// the only pack guaranteed to render without any bundle asset files.
+    /// Phase 2.5c settings will persist this choice via UserDefaults.
+    var activePackID: String = ReactionPack.silentProfessional.id
+
+    /// When true, plays the pack's audio file (if it exists in the bundle).
+    /// Default OFF — toggled by the Phase 2.5c audio toggle / debug menu item.
+    var audioEnabled: Bool = false
 
     // -------------------------------------------------------------------------
     // MARK: — Private state
@@ -114,6 +81,12 @@ final class ReactionManager {
     /// Scheduled task to auto-dismiss the current reaction.
     /// Retained so we can cancel it if dismissReaction() is called early.
     private var dismissWorkItem: DispatchWorkItem?
+
+    /// Held strongly for the duration of audio playback. AVAudioPlayer is
+    /// deallocated as soon as its last strong reference drops — without this
+    /// property the player would stop mid-clip when showReaction() returns.
+    /// Nilled out in tearDownReactionWindow() to stop audio on early dismiss.
+    private var audioPlayer: AVAudioPlayer?
 
     // ── Intrusion attempt counter ─────────────────────────────────────────────
     //
@@ -156,8 +129,10 @@ final class ReactionManager {
         }
 
         // ── Resolve pack ──────────────────────────────────────────────────────
+        // Falls back to Silent Professional on unknown ID — it is the only pack
+        // guaranteed to render without any asset files in the bundle.
         let pack = ReactionPack.all.first(where: { $0.id == activePackID })
-                   ?? ReactionPack.test
+                   ?? .silentProfessional
 
         lastFiredAt = now
 
@@ -220,8 +195,12 @@ final class ReactionManager {
         window.hasShadow            = false
         window.ignoresMouseEvents   = true   // pass-through so Cmd+Shift+W still reaches the tap
 
-        // ── Content view (Phase 2.5a: placeholder) ───────────────────────────
-        window.contentView = makePlaceholderView(frame: screenFrame, pack: pack)
+        // ── Content view ──────────────────────────────────────────────────────
+        // ReactionOverlayView.make() routes to the correct rendering path:
+        //   .minimal            → MinimalReactionView (no asset lookup)
+        //   .image + file found → ImageReactionView   (real image)
+        //   .image + file missing → ImageReactionView (placeholder + log)
+        window.contentView = ReactionOverlayView.make(pack: pack, frame: screenFrame)
 
         window.makeKeyAndOrderFront(nil)
         reactionWindow = window
@@ -230,6 +209,13 @@ final class ReactionManager {
         // extended in a future phase if needed.
         let wid = CGWindowID(window.windowNumber)
         print("Wardlume [ReactionManager]: reaction window on screen (CGWindowID=\(wid))")
+
+        // ── Audio ─────────────────────────────────────────────────────────────
+        // Gated on audioEnabled so the default (OFF) never touches the file
+        // system. When ON and the file is absent, playAudio() silently no-ops.
+        if audioEnabled {
+            playAudio(for: pack)
+        }
 
         // ── Auto-dismiss ──────────────────────────────────────────────────────
         let workItem = DispatchWorkItem { [weak self] in
@@ -241,44 +227,26 @@ final class ReactionManager {
 
     private func tearDownReactionWindow() {
         guard let window = reactionWindow else { return }
+        // Stop any in-progress audio so it doesn't outlive the overlay window.
+        audioPlayer?.stop()
+        audioPlayer = nil
         window.orderOut(nil)
         window.close()
         reactionWindow = nil
     }
 
     // -------------------------------------------------------------------------
-    // MARK: — Placeholder content view (Phase 2.5a)
+    // MARK: — Audio
     // -------------------------------------------------------------------------
-    // Phase 2.5b will replace this with real image/audio assets per pack.
-    // The view is intentionally AppKit-only (no SwiftUI hosting) to avoid the
-    // NSHostingView → NSWindow activation dance that can steal key focus.
 
-    private func makePlaceholderView(frame: CGRect, pack: ReactionPack) -> NSView {
-        let container = NSView(frame: frame)
-        container.wantsLayer = true
-        container.layer?.backgroundColor = NSColor.red.cgColor
-
-        let label = NSTextField(labelWithString: "WARD HOLDS")
-        label.font            = NSFont.boldSystemFont(ofSize: 96)
-        label.textColor       = .white
-        label.isBezeled       = false
-        label.drawsBackground = false
-        label.isEditable      = false
-        label.isSelectable    = false
-        label.alignment       = .center
-
-        // Span the full width so NSTextField's own centered alignment handles
-        // horizontal positioning — avoids sizeToFit() which fires an internal
-        // layoutSubtreeIfNeeded before the view is in a window hierarchy.
-        // 120 pt height gives comfortable headroom for a 96 pt bold font.
-        let labelHeight: CGFloat = 120
-        label.frame = CGRect(
-            x: 0,
-            y: (frame.height - labelHeight) / 2,
-            width:  frame.width,
-            height: labelHeight
-        )
-        container.addSubview(label)
-        return container
+    /// Attempts to load and play the pack's audio asset.
+    ///
+    /// Silent no-op when the bundle file is absent — this is the expected
+    /// Phase 2.5b state. No log emitted on missing audio (unlike the image
+    /// fallback) because audio is optional by design even for image packs.
+    private func playAudio(for pack: ReactionPack) {
+        guard let url = ReactionPack.audioURL(for: pack) else { return }
+        audioPlayer = try? AVAudioPlayer(contentsOf: url)
+        audioPlayer?.play()
     }
 }
