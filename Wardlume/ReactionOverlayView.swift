@@ -45,7 +45,7 @@ enum ReactionOverlayView {
             // state — contributors drop image.png here later without any code
             // changes. See ReactionPack.imageURL(for:) for the path convention.
             let image: NSImage?
-            if let url = ReactionPack.imageURL(for: pack) {
+            if let url = pack.imageURL {
                 image = NSImage(contentsOf: url)
             } else {
                 image = nil

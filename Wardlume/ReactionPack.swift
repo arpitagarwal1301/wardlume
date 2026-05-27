@@ -2,23 +2,30 @@
 //  Wardlume
 //
 //  Phase 2.5b: Pack definitions extracted from ReactionManager.
+//  Phase 3a:   Added imageURL/audioURL instance properties (Option A);
+//              all → computed var combining builtIn + user packs;
+//              static URL helpers deleted (2 call sites updated in their files).
 //
-//  Adding a new pack:
-//    1. Add a static instance in the `extension ReactionPack` below.
-//    2. Append it to `all`.
-//    3. For .image packs: drop `image.png` (and optionally `audio.mp3`) into
-//       Wardlume/Reactions/Packs/<yourPackID>/ in Finder. No Xcode changes
-//       needed — the folder is a blue folder reference that mirrors the
-//       on-disk layout verbatim into the .app bundle.
+//  ── Built-in pack asset convention ──────────────────────────────────────────
 //
-//  Asset path convention (enforced by imageURL/audioURL helpers below):
+//  Built-in image/audio URLs are resolved from Bundle.main once at static
+//  initialisation time, stored on the instance, and remain nil until the
+//  asset files are dropped into the Xcode blue folder reference at:
 //    Bundle.main / Reactions / Packs / <pack.id> / image.png
 //    Bundle.main / Reactions / Packs / <pack.id> / audio.mp3
 //
-//  When an asset is absent the overlay falls back to placeholderText on
-//  backgroundColor. This is the normal Phase 2.5b state for image packs —
-//  the pack architecture is designed so that swapping in real assets later
-//  requires zero code changes.
+//  User pack URLs are resolved from the filesystem at load time by PackLoader
+//  and stored directly on the ReactionPack instance — no Bundle.main lookup.
+//
+//  ── Adding a built-in pack ───────────────────────────────────────────────────
+//    1. Add a static instance in extension ReactionPack (Built-in packs) below.
+//    2. Append it to `builtIn`.
+//    3. For .image packs: drop image.png (and optionally audio.mp3) into
+//       Wardlume/Reactions/Packs/<yourPackID>/ in Finder. No Xcode changes
+//       needed — the folder is a blue folder reference.
+//
+//  ── Adding a user pack ──────────────────────────────────────────────────────
+//    See PackLoader.swift and the .wardpack format documentation (Phase 3d).
 
 import AppKit
 
@@ -28,8 +35,8 @@ import AppKit
 
 /// Determines how the reaction overlay is rendered.
 ///
-/// - `.image`:   Loads an image from the bundle; falls back to `placeholderText`
-///               on `backgroundColor` when the asset file is missing.
+/// - `.image`:   Loads an image from the resolved imageURL; falls back to
+///               `placeholderText` on `backgroundColor` when URL is nil.
 /// - `.minimal`: Pure-code rendering — dark background, red border frame,
 ///               bold text. No asset lookup. Always works without any files.
 enum PackStyle {
@@ -43,38 +50,59 @@ enum PackStyle {
 
 /// A single themed reaction bundle.
 ///
-/// All fields are read at overlay-construction time. Mutating a pack after
-/// ReactionManager has resolved it for a trigger() call has no effect on the
-/// already-shown overlay.
+/// All fields are read at overlay-construction time. Pack instances are
+/// immutable — mutating a pack after ReactionManager has resolved it for a
+/// trigger() call has no effect on the already-shown overlay.
+///
+/// Asset URLs are resolved at construction time:
+///   • Built-in packs: Bundle.main lookup (nil until asset files are added)
+///   • User packs: absolute filesystem URL resolved by PackLoader at launch
 struct ReactionPack {
-    /// Stable identifier. Used as the bundle subdirectory name for assets,
-    /// as the UserDefaults key for Phase 2.5c persistence, and as the
-    /// lookup key in ReactionManager.activePackID.
+
+    /// Stable identifier.
+    ///   • Built-in packs: short camelCase string (e.g. "silentProfessional")
+    ///   • User packs: reverse-DNS recommended (e.g. "com.yourname.packname")
+    /// Used as lookup key in ReactionManager.activePackID and as the bundle
+    /// subdirectory name for built-in assets.
     let id: String
 
-    /// User-visible name shown in the Phase 2.5c settings picker.
+    /// User-visible name shown in the Preferences picker.
     let name: String
 
     /// How long the overlay stays on screen before auto-dismissal.
     let duration: TimeInterval
 
-    /// Background colour used when no image asset is present (all image packs
-    /// in Phase 2.5b) or as a permanent background for .minimal packs.
+    /// Background colour used when imageURL is nil (all image packs until
+    /// real assets are added) or as the permanent background for .minimal packs.
     let backgroundColor: NSColor
 
     /// Base name of the image file inside the pack's bundle subdirectory.
-    /// Use nil for packs that never show an image (e.g. Silent Professional).
-    /// The file extension is always `.png` — see imageURL(for:).
+    /// Nil for packs that never show an image (e.g. Silent Professional).
+    /// For built-in packs only — the resolved URL is stored in imageURL.
+    /// For user packs this holds the imageFile value from the manifest.
     let imageBundleName: String?
 
     /// Base name of the audio file inside the pack's bundle subdirectory.
-    /// Use nil for packs that are always silent.
-    /// The file extension is always `.mp3` — see audioURL(for:).
+    /// Nil for packs that are always silent.
+    /// Same note as imageBundleName above.
     let audioBundleName: String?
 
-    /// Text shown when the image asset is missing or when style == .minimal.
-    /// Chosen to be readable and thematically appropriate for each pack.
+    /// Text shown when imageURL is nil (image style) or as the primary
+    /// label (minimal style).
     let placeholderText: String
+
+    /// Resolved URL for the image asset, set once at construction time.
+    ///   • Built-in packs: Bundle.main lookup → nil until asset is in bundle
+    ///   • User packs: absolute filesystem URL from PackLoader
+    ///   • Packs with no image by design (e.g. Silent Professional): always nil
+    ///
+    /// ReactionOverlayView.make() reads this directly — no static helper needed.
+    let imageURL: URL?
+
+    /// Resolved URL for the audio asset, set once at construction time.
+    /// Same resolution strategy as imageURL.
+    /// nil means no audio for this pack (silent by design or asset absent).
+    let audioURL: URL?
 
     /// Rendering strategy for the content view. See PackStyle docs.
     let style: PackStyle
@@ -88,7 +116,8 @@ extension ReactionPack {
 
     // ── Grumpy Old Man ────────────────────────────────────────────────────────
     /// Image pack. Assets: Reactions/Packs/grumpyOldMan/image.png + audio.mp3.
-    /// Phase 2.5b state: no assets → renders gray bg + "GRUMPY OLD MAN" text.
+    /// Phase 2.5b state: no assets in bundle → imageURL/audioURL both nil →
+    /// overlay renders gray bg + "GRUMPY OLD MAN" placeholder text.
     static let grumpyOldMan = ReactionPack(
         id:              "grumpyOldMan",
         name:            "Grumpy Old Man",
@@ -97,12 +126,19 @@ extension ReactionPack {
         imageBundleName: "image",
         audioBundleName: "audio",
         placeholderText: "GRUMPY OLD MAN",
+        imageURL:        Bundle.main.url(forResource: "image",
+                                         withExtension: "png",
+                                         subdirectory: "Reactions/Packs/grumpyOldMan"),
+        audioURL:        Bundle.main.url(forResource: "audio",
+                                         withExtension: "mp3",
+                                         subdirectory: "Reactions/Packs/grumpyOldMan"),
         style:           .image
     )
 
     // ── Wizard ────────────────────────────────────────────────────────────────
     /// Image pack. Assets: Reactions/Packs/wizard/image.png + audio.mp3.
-    /// Phase 2.5b state: no assets → renders dark purple bg + "WIZARD" text.
+    /// Phase 2.5b state: no assets in bundle → imageURL/audioURL both nil →
+    /// overlay renders dark purple bg + "WIZARD" placeholder text.
     static let wizard = ReactionPack(
         id:              "wizard",
         name:            "Wizard",
@@ -111,6 +147,12 @@ extension ReactionPack {
         imageBundleName: "image",
         audioBundleName: "audio",
         placeholderText: "WIZARD",
+        imageURL:        Bundle.main.url(forResource: "image",
+                                         withExtension: "png",
+                                         subdirectory: "Reactions/Packs/wizard"),
+        audioURL:        Bundle.main.url(forResource: "audio",
+                                         withExtension: "mp3",
+                                         subdirectory: "Reactions/Packs/wizard"),
         style:           .image
     )
 
@@ -126,52 +168,44 @@ extension ReactionPack {
         imageBundleName: nil,
         audioBundleName: nil,
         placeholderText: "ACCESS DENIED",
+        imageURL:        nil,    // minimal style — never needs an image
+        audioURL:        nil,    // minimal style — always silent
         style:           .minimal
     )
 
-    /// Ordered list of all built-in packs. Order determines display order
-    /// in the Phase 2.5c settings picker. silentProfessional is first because
-    /// it is the default and the guaranteed-working fallback.
-    static let all: [ReactionPack] = [
+    // ── Pack lists ────────────────────────────────────────────────────────────
+
+    /// Built-in packs only. Used by PackLoader for ID collision checks to avoid
+    /// a circular dependency: ReactionPack.all calls PackLoader.shared.userPacks,
+    /// so PackLoader must not call .all during loading — it uses .builtIn instead.
+    static let builtIn: [ReactionPack] = [
         .silentProfessional,
         .grumpyOldMan,
         .wizard,
     ]
+
+    /// All packs available in this session: built-ins first, then user packs
+    /// discovered by PackLoader at launch.
+    ///
+    /// Computed so that user packs populated by PackLoader.shared.discoverUserPacks()
+    /// are automatically included after launch. Consumers (ReactionManager,
+    /// PreferencesView) call this and always get the full list.
+    ///
+    /// Thread safety: discoverUserPacks() runs once on the main thread at launch;
+    /// all consumers also run on the main thread. Safe for current usage.
+    static var all: [ReactionPack] { builtIn + PackLoader.shared.userPacks }
 }
 
 // ---------------------------------------------------------------------------
-// MARK: — Asset URL helpers
+// MARK: — Static URL helpers (deleted in Phase 3a)
 // ---------------------------------------------------------------------------
-
-extension ReactionPack {
-
-    /// Returns the bundle URL for this pack's image asset, or nil if:
-    ///   • `imageBundleName` is nil (pack has no image by design), or
-    ///   • the file does not exist in the bundle yet (Phase 2.5b normal state).
-    ///
-    /// Subdirectory: `Reactions/Packs/<pack.id>`
-    /// The folder must be added to Xcode as a **blue folder reference** (not a
-    /// yellow group) so the directory hierarchy is preserved in the .app bundle.
-    static func imageURL(for pack: ReactionPack) -> URL? {
-        guard let name = pack.imageBundleName else { return nil }
-        return Bundle.main.url(
-            forResource:  name,
-            withExtension: "png",
-            subdirectory: "Reactions/Packs/\(pack.id)"
-        )
-    }
-
-    /// Returns the bundle URL for this pack's audio asset, or nil if:
-    ///   • `audioBundleName` is nil (pack is always silent), or
-    ///   • the file does not exist in the bundle yet.
-    ///
-    /// Same subdirectory convention as imageURL(for:).
-    static func audioURL(for pack: ReactionPack) -> URL? {
-        guard let name = pack.audioBundleName else { return nil }
-        return Bundle.main.url(
-            forResource:  name,
-            withExtension: "mp3",
-            subdirectory: "Reactions/Packs/\(pack.id)"
-        )
-    }
-}
+//
+// The static imageURL(for:) and audioURL(for:) helpers that previously lived
+// here have been removed. Their two call sites are updated to read the instance
+// properties directly:
+//
+//   ReactionOverlayView.make()    →  pack.imageURL
+//   ReactionManager.playAudio()   →  pack.audioURL
+//
+// This is Option A from the Phase 3a plan: pack instances are self-contained
+// with resolved URLs set at construction time. No lazy helper indirection.

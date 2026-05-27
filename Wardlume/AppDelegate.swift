@@ -160,6 +160,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
         statusBarItem?.menu = menu
 
+        // Phase 3a: discover user packs BEFORE ReactionManager is instantiated.
+        // ReactionManager.init() validates the persisted activePackID against
+        // ReactionPack.all. If a user pack was selected previously and the app
+        // is relaunched, that ID must already be in .all at validation time —
+        // otherwise init() silently falls back to silentProfessional.
+        PackLoader.shared.discoverUserPacks()
+        print("Wardlume [App]: loaded \(PackLoader.shared.userPacks.count) user pack(s)")
+
         // Phase 2a: instantiate the input lock manager at launch.
         // Held for the app lifetime; install() is called when ward activates.
         inputLockManager = InputLockManager()

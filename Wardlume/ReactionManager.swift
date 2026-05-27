@@ -334,7 +334,7 @@ final class ReactionManager: ObservableObject {
     /// Phase 2.5b state. No log emitted on missing audio (unlike the image
     /// fallback) because audio is optional by design even for image packs.
     private func playAudio(for pack: ReactionPack) {
-        guard let url = ReactionPack.audioURL(for: pack) else { return }
+        guard let url = pack.audioURL else { return }
         audioPlayer = try? AVAudioPlayer(contentsOf: url)
         audioPlayer?.play()
     }
