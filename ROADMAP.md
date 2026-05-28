@@ -2,6 +2,12 @@
 
 ## Shipped
 
+### v1.0.0 — First public release
+- [x] All v0.2.x features stabilized and released as v1.0.0
+- [x] Initial DMG distribution via GitHub Releases
+- [x] Marks the product's first stable public release
+- [ ] Homebrew tap for `brew install --cask wardlume` (in progress)
+
 ### v0.1.0 — Foundation (MIT-licensed open source release)
 - [x] Animated Metal glass shader overlay
 - [x] ScreenCaptureKit live desktop integration
@@ -39,7 +45,7 @@
 
 ## In Progress
 
-### v0.3.0 — TBD
+### v1.1+ — TBD
 Possible directions:
 - Community pack format (folder-based packs for sharing on GitHub)
 - Sensor fusion (Apple Watch proximity unlock)

@@ -234,17 +234,14 @@ lock except for catching inputs to trigger intrusion indicators.
 
 ## Roadmap
 
-Wardlume uses `v0.X.X` semantic versioning. Current latest: **v0.2.3**.
+Wardlume uses semantic versioning. Current latest: **v1.0.0**.
 
 **Shipped:**
-- **v0.1.0** — Foundation: Metal shader, input lock, Touch ID unlock, menu bar app
-- **v0.2.0** — Bait-and-switch reaction model + three user asset slots + Preferences UI
-- **v0.2.1** — Default pack assets shipped (Grumpy Old Man + Wizard)
-- **v0.2.2** — Minimal shader mode for silentProfessional
-- **v0.2.3** — Corner watching indicator for silentProfessional
+- **v1.0.0** — First public release. Full feature set: animated Metal overlay, input lock, Touch ID unlock, three reaction packs (Silent Professional, Grumpy Old Man, Wizard), bait-and-switch model, custom asset slots
+- **v0.2.3** and earlier — Development line (see [ROADMAP.md](ROADMAP.md) for full history)
 
-**In progress:**
-- **v0.3.0** — Direction TBD. Possible: community pack format, Apple Watch proximity unlock, multi-pack rotation, additional reaction triggers. Open for community input — see issues labeled `roadmap-discussion` or open a GitHub Discussion.
+**Next:**
+- **v1.1+** — Direction TBD. Possible: community pack format, Apple Watch proximity unlock, multi-pack rotation, additional reaction triggers. Open for community input — see issues labeled `roadmap-discussion` or open a GitHub Discussion.
 
 Read the detailed roadmap and milestone breakdown in [ROADMAP.md](ROADMAP.md).
 
