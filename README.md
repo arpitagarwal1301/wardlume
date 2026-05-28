@@ -48,24 +48,37 @@ in real time.
   auroral border pulse whenever an unauthorized keypress or click attempt is
   detected. This warns intruders off without displaying password boxes or
   interrupting the running agent.
+- ✨ **Bait-and-Switch Reaction Model** *(v0.2.0+)*: Each reaction pack defines a base image (shown continuously during ward) and a reaction image (flashes on intrusion). Combined with custom asset slots, this lets users build personalized intrusion theater without writing code.
+- ✨ **Minimal Shader Mode** *(v0.2.2)*: The default Silent Professional pack uses a sober refraction-only shader — no rainbow border, sigils, or motes. A calm productivity shield that keeps your terminal readable underneath.
+- ✨ **Corner Watching Indicator** *(v0.2.3)*: Silent Professional shows a small pill-shaped indicator with a watching eye in the bottom-right corner during ward — a quiet “yes, the ward is active” signal that flashes red on input intrusion.
 
-## Custom Assets (v0.2.0)
+## Reaction Packs
 
-Wardlume v0.2.0 introduces the bait-and-switch reaction model. Each reaction pack now has two image slots and an audio slot:
+Wardlume ships with three built-in reaction packs that respond differently when input is detected during ward:
 
-- **Base image** — shown continuously while ward is active (replaces the Metal shader)
+- **Silent Professional** — The default. Sober refracted glass over your live desktop, with a small watching-eye indicator in the corner. No characters, no theatrics — designed for users who want to monitor their terminal mid-AI-session without being tempted to touch.
+- **Grumpy Old Man** — Character pack. Shows an old man watching your desktop continuously; an angry reaction image flashes on input intrusion. Audio plays.
+- **Wizard** — Character pack. Shows a wizard scene; a wizard reaction flashes on intrusion. Audio plays.
+
+Switch packs in Preferences (Cmd+,).
+
+## Custom Assets
+
+Each reaction pack has three asset slots you can override:
+
+- **Base image** — shown continuously while ward is active (replaces the Metal shader for that activation)
 - **Reaction image** — flashes briefly when someone touches input
 - **Audio** — plays alongside the reaction image
 
-You can override any of these by dragging a file into the corresponding slot in Preferences (Cmd+,). Your uploads apply to whichever pack is selected — mix and match across packs without creating "custom packs" you have to manage.
+You can override any of these by dragging a file into the corresponding slot in Preferences (Cmd+,). Your uploads apply to whichever pack is selected — mix and match across packs without creating “custom packs” you have to manage.
 
 Supported formats:
 - Images: PNG, JPEG, HEIC, GIF (max 10MB)
 - Audio: MP3, M4A, WAV (max 10MB)
 
-Click ✕ on any slot to revert to the active pack's bundled default.
+Click ✕ on any slot to revert to the active pack’s bundled default.
 
-<!-- TODO: add Phase 4c screenshot showing the three asset slots -->
+<!-- TODO: add screenshots: Preferences UI with three slots, silentProfessional ward with corner indicator, Grumpy/Wizard ward states -->
 
 ## Quick Demo
 
@@ -221,20 +234,17 @@ lock except for catching inputs to trigger intrusion indicators.
 
 ## Roadmap
 
-Our development path is split into major milestones focused on customization,
-defense patterns, and automation:
+Wardlume uses `v0.X.X` semantic versioning. Current latest: **v0.2.3**.
 
-- **v1.0 (Current)**: Solidify core locking, performance optimizations for
-  ScreenCaptureKit, and permissions polish.
-- **v1.5 (Reaction Modes)**: Introducing themed intrusion responses. When an
-  unauthorized user attempts to interact with your Mac, the ward can trigger
-  various defensive reactions:
-  - *Grumpy Old Man*: Displays angry text alerts and sound effects.
-  - *Gandalf*: Shows a magical shield flash with the quote "You shall not pass!".
-  - *Bait-and-Switch*: Displays a fake "confidential document" overlay that,
-    when clicked, flashes a red warning and logs the intrusion attempt.
-- **v2.0 (Sensor Fusion)**: Auto-warding and presence-based locking utilizing
-  Apple Watch BLE signals and local face detection using the Vision framework.
+**Shipped:**
+- **v0.1.0** — Foundation: Metal shader, input lock, Touch ID unlock, menu bar app
+- **v0.2.0** — Bait-and-switch reaction model + three user asset slots + Preferences UI
+- **v0.2.1** — Default pack assets shipped (Grumpy Old Man + Wizard)
+- **v0.2.2** — Minimal shader mode for silentProfessional
+- **v0.2.3** — Corner watching indicator for silentProfessional
+
+**In progress:**
+- **v0.3.0** — Direction TBD. Possible: community pack format, Apple Watch proximity unlock, multi-pack rotation, additional reaction triggers. Open for community input — see issues labeled `roadmap-discussion` or open a GitHub Discussion.
 
 Read the detailed roadmap and milestone breakdown in [ROADMAP.md](ROADMAP.md).
 
@@ -246,16 +256,9 @@ proposing new features, your help is appreciated.
 
 ### Getting Started
 
-- **Good First Issue**: Fix the menu dropdown action firing bug. When the ward
-  overlay is active, clicking items in the menu bar dropdown registers visually
-  but fails to execute. Read the detailed analysis and root cause in
-  [SAFETY_NOTES.md](SAFETY_NOTES.md#menu-bar-dropdown-items-do-not-fire-while-ward-is-active)
-  to start.
-- **Issues and Discussions**: Browse existing topics or open a new one in the
-  [Issues](../../issues) section.
-- **Custom Packs**: If you are interested in designing custom unlock animations or
-  reaction packs for v1.5, we welcome early ideas and shader prototypes in
-  GitHub Discussions.
+- **Issues and Discussions**: Browse existing topics or open a new one in the [Issues](../../issues) section.
+- **Pack Asset Contributions**: Designers welcome to contribute base/reaction image sets for existing or new packs. Reaction packs with strong visual identities help showcase what bait-and-switch can do.
+- **v0.3.0 Direction**: Open question on what ships next. Community pack format? Sensor fusion? Multi-pack rotation? Weigh in via GitHub Discussions.
 
 ## License
 

@@ -19,6 +19,24 @@
 - [x] Sandbox entitlement for user-selected file access
 - [x] Input lock z-order regression fixes
 
+### v0.2.1 — Default Pack Assets
+- [x] Grumpy Old Man pack ships with bundled base image, reaction image, and audio
+- [x] Wizard pack ships with bundled base image, reaction image, and audio
+- [x] Fixed Xcode 15+ synchronized folder behavior via `explicitFolders` so bundled assets resolve correctly
+
+### v0.2.2 — Minimal Shader Mode
+- [x] Added `ShaderStyle` enum to `ReactionPack` (`.full` | `.minimal`)
+- [x] silentProfessional now renders sober refracted glass over the live desktop — no rainbow border, sigils, motes, or chromatic aberration
+- [x] Grumpy Old Man and Wizard unchanged (full theatrical shader)
+- [x] Metal shader branches on `minimalMode` uniform at desktop sampling and final composition
+
+### v0.2.3 — Corner Watching Indicator
+- [x] silentProfessional displays a small pill-shaped indicator in the bottom-right corner during ward
+- [x] eye.fill SF Symbol on dark backdrop, gentle breathing animation (4s cycle)
+- [x] Flashes red briefly on input intrusion
+- [x] Visible without dominating — signals "ward is active" without competing with terminal content
+- [x] silentProfessional now has a distinct visual identity (minimal shader + corner indicator) separate from character-driven packs
+
 ## In Progress
 
 ### v0.3.0 — TBD
