@@ -28,6 +28,7 @@ struct ShaderParams {
     float tintB;
     float aspectRatio;       // screen width ÷ height. MacBook 14/16" ≈ 1.55, iMac 24" ≈ 1.78
     float lastIntrusionT;    // shader time of last intercepted input event; -9999 = none
+    float minimalMode;       // Phase 5a: 1.0 = minimal mode, 0.0 = full mode
 };
 
 // ---------------------------------------------------------------------------
@@ -210,11 +211,19 @@ fragment float4 wardFragment(VertexOut in           [[stage_in]],
     //  real desktop pixels at zero additional UV computation cost — uvR/uvB were
     //  already computed for the shimmer effect in section 3 above.
     // -----------------------------------------------------------------------
-    float3 desktop = float3(
-        desktopTex.sample(tex_s, uvR).r,
-        desktopTex.sample(tex_s, uvDisp).g,
-        desktopTex.sample(tex_s, uvB).b
-    );
+    float3 desktop;
+    if (p.minimalMode > 0.5) {
+        // Minimal mode: no chromatic aberration — sample all channels at the
+        // refracted UV. Sober glass effect.
+        desktop = desktopTex.sample(tex_s, uvDisp).rgb;
+    } else {
+        // Full mode: chromatic aberration via per-channel UV displacement.
+        desktop = float3(
+            desktopTex.sample(tex_s, uvR).r,
+            desktopTex.sample(tex_s, uvDisp).g,
+            desktopTex.sample(tex_s, uvB).b
+        );
+    }
 
     // -----------------------------------------------------------------------
     // 4. FLOWING RAINBOW BORDER
@@ -377,20 +386,28 @@ fragment float4 wardFragment(VertexOut in           [[stage_in]],
     //  baseAlpha is preserved in ShaderParams for struct compatibility but is
     //  no longer used here — the desktop replaces the old glass base.
     // -----------------------------------------------------------------------
-    float3 colour = desktop + sheen + shimmer + sigilColor + moteColor;
-
-    // Border: base glow + intrusion reactivity pulse.
-    //
-    // pulseAge: seconds since the last intercepted input event.
-    //   -9999 default → pulseAge >> 0.20 → saturate(...) = 0 → pulseMult = 1.0
-    //   On intrusion → pulseAge ≈ 0 → pulseMult = 1.30 (30% brighter border)
-    //   After 200 ms → pulseAge = 0.20 → pulseMult eases back to 1.0
-    //
-    // saturate() = clamp(x, 0.0, 1.0) — Metal built-in.
-    float pulseAge  = p.time - p.lastIntrusionT;
-    float pulseMult = 1.0 + 0.30 * saturate(1.0 - pulseAge / 0.20);
-    colour += borderColor * (borderFade * pulseMult + bloomBoost);
-    colour  = clamp(colour, float3(0.0), float3(1.0));
+    float3 colour;
+    if (p.minimalMode > 0.5) {
+        // Minimal mode: just the refracted desktop. No sheen, shimmer, sigils,
+        // motes, or rainbow border. The terminal underneath stays readable.
+        colour = desktop;
+    } else {
+        // Full mode: all additive effects + animated rainbow border.
+        colour = desktop + sheen + shimmer + sigilColor + moteColor;
+        
+        // Border: base glow + intrusion reactivity pulse.
+        //
+        // pulseAge: seconds since the last intercepted input event.
+        //   -9999 default → pulseAge >> 0.20 → saturate(...) = 0 → pulseMult = 1.0
+        //   On intrusion → pulseAge ≈ 0 → pulseMult = 1.30 (30% brighter border)
+        //   After 200 ms → pulseAge = 0.20 → pulseMult eases back to 1.0
+        //
+        // saturate() = clamp(x, 0.0, 1.0) — Metal built-in.
+        float pulseAge  = p.time - p.lastIntrusionT;
+        float pulseMult = 1.0 + 0.30 * saturate(1.0 - pulseAge / 0.20);
+        colour += borderColor * (borderFade * pulseMult + bloomBoost);
+    }
+    colour = clamp(colour, float3(0.0), float3(1.0));
 
     // alpha = 1.0: opaque window. The compositor sees no transparency here.
     return float4(colour, 1.0);

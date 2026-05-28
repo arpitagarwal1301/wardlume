@@ -34,6 +34,24 @@
 import AppKit
 
 // ---------------------------------------------------------------------------
+// MARK: — ShaderStyle
+// ---------------------------------------------------------------------------
+
+/// Determines which Metal shader effects compose the ward background.
+///
+/// - `.full`:    All effects — refraction + iridescent sheen + chromatic shimmer
+///               + flowing rainbow border + drifting sigils + motes + chromatic
+///               aberration on desktop pixels. Theatrical and "magical". Pairs
+///               with character packs (Grumpy, Wizard).
+/// - `.minimal`: Refraction only — sober glass over the desktop, no decoration.
+///               For packs intended as a calm productivity shield where the user
+///               wants to glance at the underlying terminal.
+enum ShaderStyle {
+    case full
+    case minimal
+}
+
+// ---------------------------------------------------------------------------
 // MARK: — PackStyle
 // ---------------------------------------------------------------------------
 
@@ -125,6 +143,10 @@ struct ReactionPack {
 
     /// Rendering strategy for the content view. See PackStyle docs.
     let style: PackStyle
+
+    /// Which Metal shader composition is used during ward-active state.
+    /// See ShaderStyle docs.
+    let shaderStyle: ShaderStyle
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +178,8 @@ extension ReactionPack {
         audioURL:                Bundle.main.url(forResource: "audio",
                                                  withExtension: "mp3",
                                                  subdirectory: "Reactions/Packs/grumpyOldMan"),
-        style:                   .image
+        style:                   .image,
+        shaderStyle:             .full
     )
 
     // ── Wizard ────────────────────────────────────────────────────────────────
@@ -182,7 +205,8 @@ extension ReactionPack {
         audioURL:                Bundle.main.url(forResource: "audio",
                                                  withExtension: "mp3",
                                                  subdirectory: "Reactions/Packs/wizard"),
-        style:                   .image
+        style:                   .image,
+        shaderStyle:             .full
     )
 
     // ── Silent Professional ───────────────────────────────────────────────────
@@ -201,7 +225,8 @@ extension ReactionPack {
         baseImageURL:            nil,    // minimal style — never needs an image
         reactionImageURL:        nil,    // minimal style — never needs an image
         audioURL:                nil,    // minimal style — always silent
-        style:                   .minimal
+        style:                   .minimal,
+        shaderStyle:             .minimal
     )
 
     // ── Pack lists ────────────────────────────────────────────────────────────

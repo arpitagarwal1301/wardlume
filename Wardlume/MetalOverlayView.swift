@@ -25,6 +25,7 @@ struct ShaderParams {
     // Phase 2a: shader time of the last intercepted input event.
     // Default -9999 → pulseAge >> 0.20 s → pulseMult = 1.0 → no burst at startup.
     var lastIntrusionT:   Float = -9999.0
+    var minimalMode:      Float = 0.0    // Phase 5a: 1.0 = minimal mode, 0.0 = full mode
     var reduceMotion:     Float = 0.0    // 1.0 = enabled, 0.0 = disabled
 }
 

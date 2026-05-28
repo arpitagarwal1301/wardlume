@@ -261,6 +261,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
             // Phase 4b: layer base image above the Metal shader if one is resolved.
             let activePack = reactionManager?.activePack ?? .silentProfessional
+            
+            // Phase 5a: set shader mode based on pack's shaderStyle
+            metalView.params.minimalMode = (activePack.shaderStyle == .minimal) ? 1.0 : 0.0
+            
             if let baseURL = ReactionPack.resolvedBaseImageURL(for: activePack),
                let image = NSImage(contentsOf: baseURL) {
                 let imageView = NSImageView(frame: metalView.bounds)
