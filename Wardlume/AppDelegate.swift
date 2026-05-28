@@ -35,6 +35,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     /// image is present — the Metal shader renders directly.
     private var baseImageView: NSImageView?
 
+    /// Phase 5a-p2: pill indicator NSView (dark backdrop + eye.fill icon), present
+    /// only while the ward is active with a pack that has hasCornerIndicator = true
+    /// and no base image is present. Nilled on deactivation. Lifecycle mirrors
+    /// baseImageView.
+    private var indicatorView: NSView?
+
     // -------------------------------------------------------------------------
     // MARK: — Application launch
     // -------------------------------------------------------------------------
@@ -191,6 +197,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             // Phase 4b: remove base image view and resume Metal rendering
             baseImageView?.removeFromSuperview()
             baseImageView = nil
+
+            // Phase 5a-p2: stop breathing animation and remove corner indicator.
+            // Belt-and-suspenders alongside window.close() below: nils
+            // indicatorView in AppDelegate so the next activate cycle starts clean.
+            indicatorView?.layer?.removeAllAnimations()
+            indicatorView?.removeFromSuperview()
+            indicatorView = nil
+
             if let metalView = window.contentView as? MetalOverlayView {
                 metalView.isPaused = false  // ready for next activation
             }
@@ -282,6 +296,51 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
                 print("Wardlume [AppDelegate]: no base image, Metal shader active")
             }
 
+            // Phase 5a-p2: layer the pill indicator above Metal when the pack
+            // requests it and no base image is present (Phase 4b takes precedence).
+            if activePack.hasCornerIndicator && baseImageView == nil {
+                let pillW:  CGFloat = 80
+                let pillH:  CGFloat = 48
+                let inset:  CGFloat = 24
+
+                // Bottom-right in Cocoa coordinates (origin = bottom-left).
+                let pillX = metalView.bounds.width  - pillW - inset
+                let pillY = inset
+
+                let pill = NSView(frame: CGRect(x: pillX, y: pillY,
+                                               width: pillW, height: pillH))
+                pill.wantsLayer = true
+                pill.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
+                pill.layer?.cornerRadius    = 14
+                pill.layer?.borderWidth     = 1
+                pill.layer?.borderColor     = NSColor.white.withAlphaComponent(0.15).cgColor
+                pill.alphaValue = 0.85
+
+                // eye.fill icon — 32pt light weight, white, centered in pill.
+                let config = NSImage.SymbolConfiguration(pointSize: 32, weight: .light)
+                if let symbol = NSImage(systemSymbolName: "eye.fill",
+                                        accessibilityDescription: "Ward active")?
+                                   .withSymbolConfiguration(config) {
+                    let iconSize: CGFloat = 36
+                    let iv = NSImageView(frame: CGRect(
+                        x: (pillW - iconSize) / 2,
+                        y: (pillH - iconSize) / 2,
+                        width:  iconSize,
+                        height: iconSize))
+                    iv.image            = symbol
+                    iv.imageScaling     = .scaleProportionallyDown
+                    iv.contentTintColor = .white
+                    pill.addSubview(iv)
+                }
+
+                metalView.addSubview(pill)
+                indicatorView = pill
+
+                if let layer = pill.layer {
+                    startBreathingAnimation(on: layer)
+                }
+            }
+
             // Start desktop capture.
             guard let device = metalView.device else { return }
             let capture = DesktopCaptureManager(device: device, view: metalView)
@@ -309,7 +368,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             // Phase 2.5a: wire intrusion events to the reaction engine.
             // ReactionManager.trigger() enforces its own cooldown — this fires
             // on every consumed event regardless of the border-pulse debounce.
-            lock.onIntrusion = { [weak self] in self?.reactionManager?.trigger() }
+            // Phase 5a-p2: also flash the corner indicator on intrusion.
+            lock.onIntrusion = { [weak self] in
+                self?.reactionManager?.trigger()
+                self?.flashIndicator()
+            }
         }
     }
 
@@ -324,6 +387,48 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             guard let self, success, self.overlayWindow != nil else { return }
             self.toggleWard()
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // MARK: — Corner Indicator (Phase 5a-p2)
+    // -------------------------------------------------------------------------
+
+    /// Starts the 75%→95% opacity breathing animation on the given layer.
+    /// Extracted so it can be called both at indicator creation and after a
+    /// flash sequence completes without duplicating animation parameters.
+    private func startBreathingAnimation(on layer: CALayer) {
+        let breathe = CABasicAnimation(keyPath: "opacity")
+        breathe.fromValue      = 0.55
+        breathe.toValue        = 0.95
+        breathe.duration       = 2.0         // 2 s rise + 2 s fall (autoreverses) = 4 s cycle
+        breathe.autoreverses   = true
+        breathe.repeatCount    = .infinity
+        breathe.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(breathe, forKey: "wardBreathing")
+    }
+
+    /// Flashes the pill indicator backdrop to system-red on intrusion, then
+    /// returns to the dark backdrop. Runs as a separate CABasicAnimation on
+    /// the backgroundColor keyPath — the breathing opacity animation on the
+    /// same layer continues undisturbed (different keyPaths don't conflict).
+    ///
+    /// Guard-exits immediately when indicatorView is nil (grumpy / wizard active,
+    /// or ward deactivated) so the onIntrusion closure needs no pack check.
+    private func flashIndicator() {
+        guard let layer = indicatorView?.layer else { return }
+
+        let darkBG = NSColor.black.withAlphaComponent(0.6).cgColor
+        let redBG  = NSColor.systemRed.withAlphaComponent(0.7).cgColor
+
+        // 0.3 s to red, 0.3 s back = 0.6 s total. autoreverses handles the return.
+        // Breathing opacity animation on the same layer is unaffected (different keyPath).
+        let flash = CABasicAnimation(keyPath: "backgroundColor")
+        flash.fromValue      = darkBG
+        flash.toValue        = redBG
+        flash.duration       = 0.3
+        flash.autoreverses   = true
+        flash.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(flash, forKey: "wardFlash")
     }
 
     // -------------------------------------------------------------------------

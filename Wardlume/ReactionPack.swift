@@ -147,6 +147,11 @@ struct ReactionPack {
     /// Which Metal shader composition is used during ward-active state.
     /// See ShaderStyle docs.
     let shaderStyle: ShaderStyle
+
+    /// Whether a sober corner indicator (eye.fill SF Symbol) is shown while
+    /// the ward is active. The indicator only renders when no base image is
+    /// present — Phase 4b base-image-takes-over wins when both would apply.
+    let hasCornerIndicator: Bool
 }
 
 // ---------------------------------------------------------------------------
@@ -179,7 +184,8 @@ extension ReactionPack {
                                                  withExtension: "mp3",
                                                  subdirectory: "Reactions/Packs/grumpyOldMan"),
         style:                   .image,
-        shaderStyle:             .full
+        shaderStyle:             .full,
+        hasCornerIndicator:      false
     )
 
     // ── Wizard ────────────────────────────────────────────────────────────────
@@ -206,7 +212,8 @@ extension ReactionPack {
                                                  withExtension: "mp3",
                                                  subdirectory: "Reactions/Packs/wizard"),
         style:                   .image,
-        shaderStyle:             .full
+        shaderStyle:             .full,
+        hasCornerIndicator:      false
     )
 
     // ── Silent Professional ───────────────────────────────────────────────────
@@ -226,7 +233,8 @@ extension ReactionPack {
         reactionImageURL:        nil,    // minimal style — never needs an image
         audioURL:                nil,    // minimal style — always silent
         style:                   .minimal,
-        shaderStyle:             .minimal
+        shaderStyle:             .minimal,
+        hasCornerIndicator:      true    // Phase 5a-p2: sober eye.fill indicator
     )
 
     // ── Pack lists ────────────────────────────────────────────────────────────
