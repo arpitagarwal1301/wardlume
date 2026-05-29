@@ -51,6 +51,8 @@ in real time.
 - ✨ **Bait-and-Switch Reaction Model** *(v0.2.0+)*: Each reaction pack defines a base image (shown continuously during ward) and a reaction image (flashes on intrusion). Combined with custom asset slots, this lets users build personalized intrusion theater without writing code.
 - ✨ **Minimal Shader Mode** *(v0.2.2)*: The default Silent Professional pack uses a sober refraction-only shader — no rainbow border, sigils, or motes. A calm productivity shield that keeps your terminal readable underneath.
 - ✨ **Corner Watching Indicator** *(v0.2.3)*: Silent Professional shows a small pill-shaped indicator with a watching eye in the bottom-right corner during ward — a quiet “yes, the ward is active” signal that flashes red on input intrusion.
+- ✨ **Global Activation Hotkey** *(v1.0.1)*: Press ⌘⇧L from anywhere — even while focused in your IDE — to activate or deactivate the ward instantly. No need to click the menu bar.
+- ✨ **Quick Pack Switching** *(v1.0.1)*: Switch between Silent Professional, Grumpy Old Man, and Wizard directly from the menu bar dropdown, without opening Preferences.
 
 ## Reaction Packs
 
@@ -99,15 +101,9 @@ this process will be added here in the future:
    quietly in your macOS menu bar.
 2. **Configure Settings (Optional)**: Adjust shader parameters or hotkeys via the
    menu bar dropdown prior to activation.
-3. **Activate the Ward**: Click the menu bar icon and select **Activate Ward**,
-   or trigger it via your configured activation hotkey.
-4. **Walk Away**: Your desktop is now obscured by an animated glass refraction
-   layer. Keyboard, mouse, and trackpad gestures are locked. Anyone passing by
-   can view the screen but cannot interact with it.
-5. **Return and Unlock**: Rest your finger on the Touch ID sensor, or press
-   `Cmd+Shift+U` to bring up the system authentication sheet. Alternatively,
-   use the global escape hotkey `Cmd+Shift+W` to prompt for password unlock.
-   Once authenticated, the ward dissolves and input control is instantly restored.
+3. **Activate the Ward**: Press **⌘⇧L** from anywhere, or click the menu bar icon and select **Activate Ward**. You can also pick a reaction pack from the menu first (Silent Professional, Grumpy Old Man, or Wizard).
+4. **Walk Away**: Your desktop is now under an animated glass overlay. Keyboard, mouse, and trackpad are locked. Anyone passing by can watch the screen but cannot interact with it. After a few seconds, an on-screen hint appears showing how to unlock.
+5. **Return and Unlock**: Rest your finger on the Touch ID sensor, or press **⌘⇧U** to bring up biometric authentication. Press **⌘⇧L** to toggle the ward off directly. Once authenticated, the ward dissolves and input control is restored instantly.
 
 ## Installation and Building
 
@@ -237,11 +233,12 @@ lock except for catching inputs to trigger intrusion indicators.
 Wardlume uses semantic versioning. Current latest: **v1.0.0**.
 
 **Shipped:**
-- **v1.0.0** — First public release. Full feature set: animated Metal overlay, input lock, Touch ID unlock, three reaction packs (Silent Professional, Grumpy Old Man, Wizard), bait-and-switch model, custom asset slots
+- **v1.0.1** — Global activation hotkey (⌘⇧L), quick pack switching from the menu, on-screen unlock hint, UI polish
+- **v1.0.0** — First public release. Full feature set: animated Metal overlay, input lock, Touch ID unlock, three reaction packs, bait-and-switch model, custom asset slots
 - **v0.2.3** and earlier — Development line (see [ROADMAP.md](ROADMAP.md) for full history)
 
 **Next:**
-- **v1.1+** — Direction TBD. Possible: community pack format, Apple Watch proximity unlock, multi-pack rotation, additional reaction triggers. Open for community input — see issues labeled `roadmap-discussion` or open a GitHub Discussion.
+- **v1.1+** — Direction TBD. Possible: community pack format, Apple Watch proximity unlock, configurable hotkeys, multi-pack rotation, additional reaction triggers. Open for community input — see issues labeled `roadmap-discussion` or open a GitHub Discussion.
 
 Read the detailed roadmap and milestone breakdown in [ROADMAP.md](ROADMAP.md).
 

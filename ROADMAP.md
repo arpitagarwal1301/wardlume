@@ -2,6 +2,13 @@
 
 ## Shipped
 
+### v1.0.1 — Usability polish
+- [x] Global activation hotkey (⌘⇧L) — toggle the ward from anywhere, even while focused in another app (Carbon RegisterEventHotKey, consumed so it doesn't leak to the foreground app)
+- [x] Quick pack switching from the menu bar dropdown (no need to open Preferences)
+- [x] On-screen unlock hint — fades in a few seconds after activation, shown for all packs
+- [x] Corner indicator repositioned above the unlock hint (silentProfessional), synced red intrusion flash across both
+- [x] Menu reordered so Quit is last; shortcut hidden on "Deactivate Ward" to avoid showing a non-functional keyEquivalent while warded
+
 ### v1.0.0 — First public release
 - [x] All v0.2.x features stabilized and released as v1.0.0
 - [x] Initial DMG distribution via GitHub Releases
