@@ -68,59 +68,99 @@ enum ReactionOverlayView {
 
 /// Pure-code reaction view. No asset files required — always renders correctly.
 ///
-/// Visual: near-black background + 6pt red border inset from screen edges
-///         + bold white "ACCESS DENIED" (or pack.placeholderText) centered.
-///
-/// The red border is drawn in draw(_:) using NSBezierPath so it is crisp at
-/// all display scales without needing a separate layer or border view.
+/// Visual: near-black textured background (subtle crosshatch grid) + centred
+/// lock-pill containing a lock.fill icon and "Input locked" at 28pt semibold.
+/// Quiet authority — the locked state reads instantly without alarm aesthetics.
 final class MinimalReactionView: NSView {
 
     private let pack: ReactionPack
-    private let label: NSTextField
 
     init(pack: ReactionPack, frame: CGRect) {
         self.pack = pack
+        super.init(frame: frame)
 
-        label = NSTextField(labelWithString: pack.placeholderText)
-        label.font            = NSFont.boldSystemFont(ofSize: 96)
+        wantsLayer = true
+        layer?.backgroundColor = pack.backgroundColor.cgColor  // solid near-black; crosshatch drawn in draw(_:)
+
+        // ── Lock pill — centred on screen ─────────────────────────────────────
+        // 300 × 80 pt — prominent but proportional to the hint pill below.
+        let pillW: CGFloat = 300
+        let pillH: CGFloat = 80
+        let pill = NSView(frame: CGRect(
+            x:      (frame.width  - pillW) / 2,
+            y:      (frame.height - pillH) / 2,
+            width:  pillW,
+            height: pillH))
+        pill.wantsLayer = true
+        pill.layer?.backgroundColor = NSColor(white: 0.18, alpha: 0.88).cgColor
+        pill.layer?.cornerRadius    = 20
+        pill.layer?.borderWidth     = 1
+        pill.layer?.borderColor     = NSColor.white.withAlphaComponent(0.22).cgColor
+        addSubview(pill)
+
+        // lock.fill icon — 28pt SF Symbol, white, left side of pill.
+        let iconPadL: CGFloat = 20
+        let iconSize: CGFloat = 32
+        let config = NSImage.SymbolConfiguration(pointSize: 28, weight: .regular)
+        if let symbol = NSImage(systemSymbolName: "lock.fill",
+                                accessibilityDescription: "Screen locked")?
+                           .withSymbolConfiguration(config) {
+            let iv = NSImageView(frame: CGRect(
+                x:      iconPadL,
+                y:      (pillH - iconSize) / 2,
+                width:  iconSize,
+                height: iconSize))
+            iv.image            = symbol
+            iv.imageScaling     = .scaleProportionallyDown
+            iv.contentTintColor = .white
+            pill.addSubview(iv)
+        }
+
+        // "Input locked" — 36pt semibold, white. Fixed frame avoids sizeToFit()
+        // layout recursion (see file header note). Height 44 fits 36pt comfortably.
+        let textX: CGFloat  = iconPadL + iconSize + 12
+        let textH: CGFloat  = 44
+        let label = NSTextField(labelWithString: "Input locked")
+        label.font            = NSFont.systemFont(ofSize: 36, weight: .semibold)
         label.textColor       = .white
         label.isBezeled       = false
         label.drawsBackground = false
         label.isEditable      = false
         label.isSelectable    = false
-        label.alignment       = .center
-
-        super.init(frame: frame)
-
-        wantsLayer = true
-        layer?.backgroundColor = pack.backgroundColor.cgColor
-
-        // Full-width label, fixed height — avoids sizeToFit() layout recursion.
-        let labelHeight: CGFloat = 120
+        label.alignment       = .left
         label.frame = CGRect(
-            x:      0,
-            y:      (frame.height - labelHeight) / 2,
-            width:  frame.width,
-            height: labelHeight
-        )
-        addSubview(label)
+            x:      textX,
+            y:      (pillH - textH) / 2,
+            width:  pillW - textX - 12,
+            height: textH)
+        pill.addSubview(label)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
 
-    /// Draws the 6pt red border frame inset by the stroke half-width (3pt)
-    /// so the stroke sits fully inside the view bounds.
+    /// Crosshatch grid texture — 32 pt spacing, 0.75 pt stroke, 7% white.
+    /// Drawn into the layer backing store on top of the near-black background.
+    /// Self-contained: no dependency on window opacity or compositor order.
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        let borderWidth: CGFloat = 6.0
-        let inset = borderWidth / 2
+        let spacing: CGFloat = 32
+        NSColor.white.withAlphaComponent(0.07).setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 0.75
 
-        let borderRect = bounds.insetBy(dx: inset, dy: inset)
-        let path = NSBezierPath(rect: borderRect)
-        path.lineWidth = borderWidth
-
-        NSColor(red: 0.9, green: 0.05, blue: 0.05, alpha: 1.0).setStroke()
+        var y: CGFloat = 0
+        while y <= bounds.height {
+            path.move(to: CGPoint(x: 0,            y: y))
+            path.line(to: CGPoint(x: bounds.width, y: y))
+            y += spacing
+        }
+        var x: CGFloat = 0
+        while x <= bounds.width {
+            path.move(to: CGPoint(x: x, y: 0))
+            path.line(to: CGPoint(x: x, y: bounds.height))
+            x += spacing
+        }
         path.stroke()
     }
 }

@@ -173,7 +173,15 @@ final class ReactionManager: ObservableObject {
         // Restore cooldown with closest-valid-value logic (Requirement 5.8)
         let savedCooldown = UserDefaults.standard.double(forKey: "wardlume.cooldown")
         if savedCooldown > 0 {
-            self.cooldown = Self.closestValidCooldown(savedCooldown)
+            let snapped = Self.closestValidCooldown(savedCooldown)
+            // Migration guard: any stale value above 5 s (e.g. old default of 10 s)
+            // is capped back to 5 s and persisted so it does not re-appear on relaunch.
+            if snapped > 5.0 {
+                self.cooldown = 5.0
+                UserDefaults.standard.set(5.0, forKey: "wardlume.cooldown")
+            } else {
+                self.cooldown = snapped
+            }
         } else {
             self.cooldown = 5.0
         }

@@ -168,7 +168,7 @@ extension ReactionPack {
     static let grumpyOldMan = ReactionPack(
         id:                      "grumpyOldMan",
         name:                    "Grumpy Old Man",
-        duration:                2.0,
+        duration:                3.0,
         backgroundColor:         NSColor(red: 0.4, green: 0.4, blue: 0.42, alpha: 1.0),
         baseImageBundleName:     "baseImage",
         reactionImageBundleName: "reactionImage",
@@ -196,7 +196,7 @@ extension ReactionPack {
     static let wizard = ReactionPack(
         id:                      "wizard",
         name:                    "Wizard",
-        duration:                2.5,
+        duration:                3.0,
         backgroundColor:         NSColor(red: 0.2, green: 0.1, blue: 0.3, alpha: 1.0),
         baseImageBundleName:     "baseImage",
         reactionImageBundleName: "reactionImage",
@@ -223,7 +223,7 @@ extension ReactionPack {
     static let silentProfessional = ReactionPack(
         id:                      "silentProfessional",
         name:                    "Silent Professional",
-        duration:                0.6,
+        duration:                3.0,
         backgroundColor:         NSColor(red: 0.05, green: 0.05, blue: 0.05, alpha: 1.0),
         baseImageBundleName:     nil,
         reactionImageBundleName: nil,

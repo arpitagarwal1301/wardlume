@@ -387,10 +387,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             // Unlock hint — shown for ALL packs so users can always discover how to unlock.
             // Fades in after a short delay to preserve the initial "magic" moment.
             do {
-                let hintText = "Touch ID or ⌘⇧U to unlock"
-                let label = NSTextField(labelWithString: hintText)
-                label.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .medium)
-                label.textColor = .white
+                // Attributed hint: "Press " + "⌘⇧U" (17pt semibold) + " to unlock"
+                // Mixing sizes inside one label so the shortcut symbols are clearly
+                // legible without making the surrounding words feel oversized.
+                let normalFont   = NSFont.monospacedSystemFont(ofSize: 13, weight: .medium)
+                let shortcutFont = NSFont.monospacedSystemFont(ofSize: 17, weight: .semibold)
+                let normalAttrs:   [NSAttributedString.Key: Any] = [.font: normalFont,   .foregroundColor: NSColor.white]
+                let shortcutAttrs: [NSAttributedString.Key: Any] = [.font: shortcutFont, .foregroundColor: NSColor.white]
+
+                let attrStr = NSMutableAttributedString(string: "Press ", attributes: normalAttrs)
+                attrStr.append(NSAttributedString(string: "⌘⇧U",        attributes: shortcutAttrs))
+                attrStr.append(NSAttributedString(string: " to unlock", attributes: normalAttrs))
+
+                let label = NSTextField(labelWithString: "")
+                label.attributedStringValue = attrStr
                 label.backgroundColor = .clear
                 label.isBezeled = false
                 label.isEditable = false
