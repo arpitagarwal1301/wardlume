@@ -107,17 +107,43 @@ this process will be added here in the future:
 
 ## Installation and Building
 
-Wardlume is currently in pre-release development. To use the application, you must
-clone the repository and compile it from source using Xcode.
+### Install (recommended)
 
-### Requirements
+1. Download `Wardlume-1.0.1.dmg` from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest)
+2. Open the DMG and drag **Wardlume** into your Applications folder
+
+#### First launch — opening an unsigned app
+
+Wardlume is open source and isn't signed with a paid Apple Developer certificate, so on first launch macOS shows a warning that it *"could not verify Wardlume is free of malware."* This is expected for apps distributed outside the App Store — you can read every line of what Wardlume does in this repository.
+
+**To open it (macOS Sequoia 15 / Tahoe 26):**
+
+1. Double-click Wardlume. When the warning appears, click **Done** — *not* "Move to Bin".
+2. Open **System Settings → Privacy & Security**.
+3. Scroll down to the **Security** section.
+4. You'll see *"Wardlume was blocked to protect your Mac."* Click **Open Anyway**.
+5. Authenticate with Touch ID or your password, then click **Open Anyway** once more.
+
+Wardlume opens normally on every launch after this.
+
+**If the "Open Anyway" button doesn't appear**, open Terminal and run:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Wardlume.app
+```
+
+Then double-click Wardlume — it opens normally.
+
+### Build from Source
+
+#### Requirements
 
 - **macOS Tahoe 26.0+** or later (older macOS versions are not tested or supported)
 - **Apple Silicon Mac** (M1/M2/M3/M4 or later recommended; Intel-based systems
   may experience degraded performance)
 - **Xcode 16.0+** with command line tools installed
 
-### Building from Source
+#### Building and Running
 
 To build and run Wardlume locally, execute the following commands in your terminal:
 
@@ -134,34 +160,26 @@ Once Xcode opens:
 3. Press `Cmd+R` (or select **Product → Run** from the menu) to compile and launch
    the application.
 
-### Running the App
-
 Once compiled, Xcode will place the built `Wardlume.app` bundle in your build folder.
 You can run it directly from there, or copy the built bundle to your system
 `/Applications` folder for convenient launching and long-term usage.
 
 ## Permissions
 
-To successfully intercept events and record the screen for the refraction shader,
-Wardlume requires three system-level permissions. Without these, the application
-cannot protect your desktop:
+Wardlume needs three macOS permissions. On first ward activation it prompts for them:
 
-- **Screen Recording**: Required by ScreenCaptureKit to capture the desktop frame
-  buffer. The app uses these pixels locally to feed the Metal fragment shader for
-  real-time refraction; no screen data is ever saved or transmitted.
-- **Accessibility**: Required to establish the low-level `CGEventTap` which blocks
-  keyboard and mouse inputs.
-- **Input Monitoring**: Required to detect intrusion attempts (such as keypresses
-  or mouse clicks) while the ward is active, which triggers the visual pulse
-  animation.
+- **Screen Recording** — renders the live desktop refraction (uses ScreenCaptureKit to capture the desktop frame buffer; no screen data is ever saved or transmitted)
+- **Accessibility** — locks keyboard, mouse, and trackpad
+- **Input Monitoring** — detects intrusion attempts
 
 > [!IMPORTANT]
 > macOS security policies dictate that after granting these permissions in
 > **System Settings → Privacy & Security**, you must completely **quit and
 > relaunch** Wardlume for the permissions to take effect.
 >
-> For full details on safety mechanisms, local fallbacks, and security boundaries,
-> read [SAFETY_NOTES.md](SAFETY_NOTES.md).
+> If the ward activates but input isn't locked, Accessibility or Input Monitoring usually wasn't granted — check those two and relaunch.
+
+For full details on safety mechanisms, local fallbacks, and security boundaries, read [SAFETY_NOTES.md](SAFETY_NOTES.md).
 
 ## Architecture
 
