@@ -80,7 +80,7 @@ final class MinimalReactionView: NSView {
         super.init(frame: frame)
 
         wantsLayer = true
-        layer?.backgroundColor = pack.backgroundColor.cgColor  // solid near-black; crosshatch drawn in draw(_:)
+        layer?.backgroundColor = NSColor(white: 0.0, alpha: 0.15).cgColor  // semi-transparent dark overlay; crosshatch drawn in draw(_:)
 
         // ── Lock pill — centred on screen ─────────────────────────────────────
         // 300 × 80 pt — prominent but proportional to the hint pill below.

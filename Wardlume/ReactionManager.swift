@@ -289,7 +289,15 @@ final class ReactionManager: ObservableObject {
         )
         window.isReleasedWhenClosed = false
         window.level                = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
-        window.isOpaque             = true
+        
+        // Dynamically set opacity based on pack style to let the Metal shader show through in minimal mode
+        if pack.style == .minimal {
+            window.isOpaque         = false
+            window.backgroundColor  = .clear
+        } else {
+            window.isOpaque         = true
+            window.backgroundColor  = .black
+        }
         window.hasShadow            = false
         window.ignoresMouseEvents   = true   // pass-through so Cmd+Shift+W still reaches the tap
 
