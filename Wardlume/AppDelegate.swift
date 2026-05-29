@@ -271,9 +271,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
                 alert.addButton(withTitle: "Cancel")
 
                 if alert.runModal() == .alertFirstButtonReturn {
-                    let url = URL(string:
-                        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-                    NSWorkspace.shared.open(url)
+                    // Open the pane for whichever permission is actually missing.
+                    // If both are missing, open Accessibility first — after granting and
+                    // relaunching, the next activation attempt routes to Input Monitoring.
+                    let pane: String
+                    if !InputLockManager.accessibilityGranted() {
+                        pane = "Privacy_Accessibility"
+                    } else {
+                        pane = "Privacy_ListenEvent"   // Input Monitoring pane
+                    }
+                    if let url = URL(string:
+                        "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
+                        NSWorkspace.shared.open(url)
+                    }
                 }
                 return
             }
