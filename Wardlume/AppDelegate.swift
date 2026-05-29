@@ -41,6 +41,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     /// baseImageView.
     private var indicatorView: NSView?
 
+    /// Unlock hint label shown during ward — fades in a few seconds after activation
+    /// so users can always discover how to unlock. Shown for all packs.
+    /// Torn down with the ward, mirroring indicatorView lifecycle.
+    private var unlockHintView: NSView?
+
     // -------------------------------------------------------------------------
     // MARK: — Application launch
     // -------------------------------------------------------------------------
@@ -95,51 +100,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         toggleMenuItem?.target = self
         menu.addItem(toggleMenuItem!)
 
-        menu.addItem(NSMenuItem.separator())
-
-        let preferencesItem = NSMenuItem(title: "Preferences...",
-                                         action: #selector(openPreferences),
-                                         keyEquivalent: ",")
-        preferencesItem.target = self
-        menu.addItem(preferencesItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        unlockMenuItem = NSMenuItem(title: "Unlock with Touch ID...",
-                                    action: #selector(unlockWithBiometrics),
-                                    keyEquivalent: "")
-        unlockMenuItem?.target = self
-        unlockMenuItem?.isEnabled = false  // Disabled until ward is active
-        menu.addItem(unlockMenuItem!)
-
-        menu.addItem(NSMenuItem.separator())
-
-        let quitItem = NSMenuItem(title: "Quit",
-                                  action: #selector(quitApp),
-                                  keyEquivalent: "q")
-        quitItem.target = self
-        menu.addItem(quitItem)
-
-        // ── DEBUG-only: "Test Lock (10s)" ─────────────────────────────────────
-        // Installs the CGEventTap for 10 seconds WITHOUT creating the shader
-        // overlay window, so you can safely verify:
-        //   • Cmd+Shift+W fires and uninstalls the tap immediately (scenario 2)
-        //   • The status-bar menu stays fully accessible (scenarios 3 & 4)
-        // Uses a dummy NSWindow as wardWindow (no CGWindowID collision with any
-        // real window since it is never made visible).
-#if DEBUG
-        menu.addItem(NSMenuItem.separator())
-        let testItem = NSMenuItem(title: "Test Lock (10s)",
-                                  action: #selector(testLock),
-                                  keyEquivalent: "")
-        testItem.target = self
-        menu.addItem(testItem)
-#endif
-
-#if DEBUG
-        // ── Pack selector (Phase 2.5b — removed in Phase 2.5c) ────────────────
-        // These DEBUG menu items are replaced by the Preferences window.
-        // Wrapped in #if DEBUG to delete in release builds.
+        // ── Pack switcher — also available in Preferences ─────────────────────
         menu.addItem(NSMenuItem.separator())
 
         let grumpyItem = NSMenuItem(title: "Set Pack: Grumpy Old Man",
@@ -159,7 +120,45 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
                                     keyEquivalent: "")
         silentItem.target = self
         menu.addItem(silentItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let preferencesItem = NSMenuItem(title: "Preferences...",
+                                         action: #selector(openPreferences),
+                                         keyEquivalent: ",")
+        preferencesItem.target = self
+        menu.addItem(preferencesItem)
+
+        unlockMenuItem = NSMenuItem(title: "Unlock with Touch ID (⌘⇧U)...",
+                                    action: #selector(unlockWithBiometrics),
+                                    keyEquivalent: "")
+        unlockMenuItem?.target = self
+        unlockMenuItem?.isEnabled = false  // Disabled until ward is active
+        menu.addItem(unlockMenuItem!)
+
+        // ── DEBUG-only: "Test Lock (10s)" ─────────────────────────────────────
+        // Installs the CGEventTap for 10 seconds WITHOUT creating the shader
+        // overlay window, so you can safely verify:
+        //   • Cmd+Shift+W fires and uninstalls the tap immediately (scenario 2)
+        //   • The status-bar menu stays fully accessible (scenarios 3 & 4)
+        // Uses a dummy NSWindow as wardWindow (no CGWindowID collision with any
+        // real window since it is never made visible).
+#if DEBUG
+        menu.addItem(NSMenuItem.separator())
+        let testItem = NSMenuItem(title: "Test Lock (10s)",
+                                  action: #selector(testLock),
+                                  keyEquivalent: "")
+        testItem.target = self
+        menu.addItem(testItem)
 #endif
+
+        menu.addItem(NSMenuItem.separator())
+
+        let quitItem = NSMenuItem(title: "Quit",
+                                  action: #selector(quitApp),
+                                  keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
 
         statusBarItem?.menu = menu
 
@@ -204,6 +203,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             indicatorView?.layer?.removeAllAnimations()
             indicatorView?.removeFromSuperview()
             indicatorView = nil
+
+            // Tear down unlock hint. The asyncAfter fade-in uses [weak self] and
+            // guards on self?.unlockHintView, so if the ward is deactivated before
+            // the 4-second mark the guard fails — no crash, no orphaned animation.
+            unlockHintView?.layer?.removeAllAnimations()
+            unlockHintView?.removeFromSuperview()
+            unlockHintView = nil
 
             if let metalView = window.contentView as? MetalOverlayView {
                 metalView.isPaused = false  // ready for next activation
@@ -301,11 +307,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             if activePack.hasCornerIndicator && baseImageView == nil {
                 let pillW:  CGFloat = 80
                 let pillH:  CGFloat = 48
-                let inset:  CGFloat = 24
 
-                // Bottom-right in Cocoa coordinates (origin = bottom-left).
-                let pillX = metalView.bounds.width  - pillW - inset
-                let pillY = inset
+                // Horizontally centered, above the unlock hint with a tight gap.
+                // Hint sits at y≈40 with height≈40pt, so its top edge ≈80pt.
+                // Eye pill bottom edge at y=93 → ~13pt gap between the two pills.
+                let pillX = (metalView.bounds.width - pillW) / 2
+                let pillY: CGFloat = 93
 
                 let pill = NSView(frame: CGRect(x: pillX, y: pillY,
                                                width: pillW, height: pillH))
@@ -341,6 +348,55 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
                 }
             }
 
+            // Unlock hint — shown for ALL packs so users can always discover how to unlock.
+            // Fades in after a short delay to preserve the initial "magic" moment.
+            do {
+                let hintText = "Touch ID or ⌘⇧U to unlock"
+                let label = NSTextField(labelWithString: hintText)
+                label.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .medium)
+                label.textColor = .white
+                label.backgroundColor = .clear
+                label.isBezeled = false
+                label.isEditable = false
+                label.alignment = .center
+                label.sizeToFit()
+
+                let padX: CGFloat = 16
+                let padY: CGFloat = 10
+                let pillW = label.frame.width + padX * 2
+                let pillH = label.frame.height + padY * 2
+
+                // Bottom-center, 40pt up from the bottom edge (Cocoa origin = bottom-left).
+                let hintX = (metalView.bounds.width - pillW) / 2
+                let hintY: CGFloat = 40
+
+                let hint = NSView(frame: CGRect(x: hintX, y: hintY, width: pillW, height: pillH))
+                hint.wantsLayer = true
+                hint.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
+                hint.layer?.cornerRadius = pillH / 2
+                hint.layer?.borderWidth = 1
+                hint.layer?.borderColor = NSColor.white.withAlphaComponent(0.15).cgColor
+
+                // Center the label inside the hint pill.
+                label.frame = CGRect(x: padX, y: padY, width: label.frame.width, height: label.frame.height)
+                hint.addSubview(label)
+
+                // Start fully transparent, fade in after a delay.
+                hint.alphaValue = 0.0
+                metalView.addSubview(hint)
+                unlockHintView = hint
+
+                // Fade in after 4 seconds — preserves the initial aesthetic, then ensures
+                // anyone lingering/confused sees the unlock instructions.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { [weak self] in
+                    guard let hint = self?.unlockHintView else { return }
+                    NSAnimationContext.runAnimationGroup { ctx in
+                        ctx.duration = 1.0
+                        hint.animator().alphaValue = 0.75
+                    }
+                }
+            }
+
             // Start desktop capture.
             guard let device = metalView.device else { return }
             let capture = DesktopCaptureManager(device: device, view: metalView)
@@ -368,10 +424,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             // Phase 2.5a: wire intrusion events to the reaction engine.
             // ReactionManager.trigger() enforces its own cooldown — this fires
             // on every consumed event regardless of the border-pulse debounce.
-            // Phase 5a-p2: also flash the corner indicator on intrusion.
+            // Phase 5a-p2: flash both pills in one CATransaction so Core Animation
+            // schedules both layer.add calls on the same frame — perfectly synced glow.
+            // Both flash methods guard on their own view; safe to call unconditionally.
             lock.onIntrusion = { [weak self] in
-                self?.reactionManager?.trigger()
-                self?.flashIndicator()
+                guard let self else { return }
+                self.reactionManager?.trigger()
+                CATransaction.begin()
+                self.flashIndicator()
+                self.flashUnlockHint()
+                CATransaction.commit()
             }
         }
     }
@@ -431,6 +493,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         layer.add(flash, forKey: "wardFlash")
     }
 
+    /// Flashes the unlock hint backdrop red on intrusion, identical in structure
+    /// to flashIndicator() — dark→red, 0.3s, autoreverses, easeInEaseOut — so
+    /// both pills rise and fall in perfect unison when called inside the same
+    /// CATransaction. Guard-exits if the hint isn't present yet (e.g., intrusion
+    /// fires before the 4s fade-in) or if the ward has been deactivated.
+    private func flashUnlockHint() {
+        guard let layer = unlockHintView?.layer else { return }
+
+        let darkBG = NSColor.black.withAlphaComponent(0.6).cgColor
+        let redBG  = NSColor.systemRed.withAlphaComponent(0.7).cgColor
+
+        // Identical to flashIndicator(): dark→red, 0.3s, autoreverses = 0.6s total.
+        // Both pills animate on the same curve so the glow is frame-locked in sync.
+        let flash = CABasicAnimation(keyPath: "backgroundColor")
+        flash.fromValue      = darkBG
+        flash.toValue        = redBG
+        flash.duration       = 0.3
+        flash.autoreverses   = true
+        flash.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(flash, forKey: "hintFlash")
+    }
+
     // -------------------------------------------------------------------------
     // MARK: — Preferences Window
     // -------------------------------------------------------------------------
@@ -480,13 +564,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         case #selector(toggleWard),
              #selector(unlockWithBiometrics),
              #selector(openPreferences),
-             #selector(quitApp):
-            return true
-        #if DEBUG
-        case #selector(testLock),
+             #selector(quitApp),
              #selector(debugSetPackGrumpy),
              #selector(debugSetPackWizard),
              #selector(debugSetPackSilent):
+            return true
+        #if DEBUG
+        case #selector(testLock):
             return true
         #endif
         default:
@@ -562,25 +646,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
               "Try Cmd+Shift+W, the status-bar menu, and typing in other apps.")
     }
 
+#endif
+
     // ── Pack selector helpers ─────────────────────────────────────────────────
-    // Temporary until Phase 2.5c adds the settings UI picker.
     // Each method sets activePackID; the next trigger() picks up the change.
+    // Also accessible via Preferences.
 
     @objc func debugSetPackGrumpy() {
         reactionManager?.activePackID = ReactionPack.grumpyOldMan.id
-        print("Wardlume [DEBUG]: active pack → grumpyOldMan")
     }
 
     @objc func debugSetPackWizard() {
         reactionManager?.activePackID = ReactionPack.wizard.id
-        print("Wardlume [DEBUG]: active pack → wizard")
     }
 
     @objc func debugSetPackSilent() {
         reactionManager?.activePackID = ReactionPack.silentProfessional.id
-        print("Wardlume [DEBUG]: active pack → silentProfessional")
     }
-#endif
 }
 
 // -------------------------------------------------------------------------
