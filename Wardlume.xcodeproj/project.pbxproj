@@ -12,13 +12,13 @@
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		2B79C7212FC62B6100267C1C /* Wardlume */ = {
-    isa = PBXFileSystemSynchronizedRootGroup;
-    explicitFolders = (
-        Reactions,
-    );
-    path = Wardlume;
-    sourceTree = "<group>";
-};
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFolders = (
+				Reactions,
+			);
+			path = Wardlume;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */

@@ -3,6 +3,7 @@ import SwiftUI
 import MetalKit
 import CoreGraphics
 import ScreenCaptureKit
+import Carbon.HIToolbox
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenuDelegate {
     var statusBarItem: NSStatusItem?
@@ -45,6 +46,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     /// so users can always discover how to unlock. Shown for all packs.
     /// Torn down with the ward, mirroring indicatorView lifecycle.
     private var unlockHintView: NSView?
+
+    /// Global ward activation hotkey (⌘⇧L). Registered once at launch via Carbon
+    /// RegisterEventHotKey so the combo is consumed system-wide — it works while
+    /// Wardlume is in the background and doesn’t leak to the foreground app.
+    /// Held for the app’s lifetime; deinit unregisters automatically.
+    private var activationHotkey: GlobalHotkey?
 
     // -------------------------------------------------------------------------
     // MARK: — Application launch
@@ -96,7 +103,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
         toggleMenuItem = NSMenuItem(title: "Activate Ward",
                                     action: #selector(toggleWard),
-                                    keyEquivalent: "")
+                                    keyEquivalent: "l")
+        toggleMenuItem?.keyEquivalentModifierMask = [.command, .shift]
         toggleMenuItem?.target = self
         menu.addItem(toggleMenuItem!)
 
@@ -162,6 +170,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
         statusBarItem?.menu = menu
 
+        // Global activation hotkey: ⌘⇧L toggles the ward from anywhere, even when
+        // Wardlume is not frontmost (e.g. while focused in an IDE). Uses Carbon so
+        // the combo is consumed and doesn’t leak to the foreground app.
+        // kVK_ANSI_L = 0x25. cmdKey | shiftKey from Carbon.HIToolbox.
+        activationHotkey = GlobalHotkey(
+            keyCode: UInt32(kVK_ANSI_L),
+            modifiers: UInt32(cmdKey | shiftKey)
+        ) { [weak self] in
+            self?.toggleWard()
+        }
+        if activationHotkey == nil {
+            print("Wardlume [App]: failed to register global activation hotkey ⌘⇧L")
+        }
+
         // Phase 4a: initialize user asset slots from disk.
         // Accessing .shared triggers init() which calls scan().
         _ = UserAssetManager.shared
@@ -221,6 +243,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             window.close()
             overlayWindow         = nil
             toggleMenuItem?.title = "Activate Ward"
+            toggleMenuItem?.keyEquivalent = "l"
+            toggleMenuItem?.keyEquivalentModifierMask = [.command, .shift]
             unlockMenuItem?.isEnabled = false
 
         } else {
@@ -277,6 +301,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
             overlayWindow         = window
             toggleMenuItem?.title = "Deactivate Ward"
+            toggleMenuItem?.keyEquivalent = ""
+            toggleMenuItem?.keyEquivalentModifierMask = []
             unlockMenuItem?.isEnabled = true
 
             // Phase 4b: layer base image above the Metal shader if one is resolved.
