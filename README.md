@@ -277,8 +277,6 @@ Wardlume is **source-available** under the [PolyForm Noncommercial License 1.0.0
 
 Contributions are welcome under the terms in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-> Versions through v1.0.1 were released under the MIT License and remain available under those terms. Relicensing applies to development from v1.0.2 onward.
-
 ---
 
 Built with 🪄 by Arpit Agarwal. Inspired by every Mac running AI agents at coffee
