@@ -5,7 +5,8 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/arpitagarwal1301/wardlume/build.yml?branch=main&style=flat-square)](https://github.com/arpitagarwal1301/wardlume/actions)
 [![Platform: macOS Tahoe 26+](https://img.shields.io/badge/platform-macOS%20Tahoe%2026+-lightgrey.svg?style=flat-square)](https://developer.apple.com/macos/)
 
-![Wardlume Hero](https://github.com/arpitagarwal1301/wardlume/blob/main/.github/assets/wardlume-hero.gif)
+https://github.com/user-attachments/assets/9e088995-606f-4bdd-97da-0e40e846b521
+
 
 With the rise of autonomous AI coding agents like Claude Code and Cursor,
 developers frequently leave their machines running complex, long-running tasks
@@ -93,6 +94,8 @@ this process will be added here in the future:
 
 <!-- Touch ID Unlock Demo GIF Placeholder -->
 <!-- ![Wardlume Touch ID Unlock Flow](https://raw.githubusercontent.com/arpitagarwal1301/wardlume/main/.github/assets/wardlume-unlock.gif) -->
+
+
 
 ## How to Use
 
