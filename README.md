@@ -3,7 +3,6 @@
 > Cast a watching ward over your Mac. See your AI agents work. Intruders cannot.
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/arpitagarwal1301/wardlume/build.yml?branch=main&style=flat-square)](https://github.com/arpitagarwal1301/wardlume/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Platform: macOS Tahoe 26+](https://img.shields.io/badge/platform-macOS%20Tahoe%2026+-lightgrey.svg?style=flat-square)](https://developer.apple.com/macos/)
 
 ![Wardlume Hero](https://github.com/arpitagarwal1301/wardlume/blob/main/.github/assets/wardlume-hero.gif)
@@ -114,7 +113,7 @@ this process will be added here in the future:
 
 #### First launch — opening an unsigned app
 
-Wardlume is open source and isn't signed with a paid Apple Developer certificate, so on first launch macOS shows a warning that it *"could not verify Wardlume is free of malware."* This is expected for apps distributed outside the App Store — you can read every line of what Wardlume does in this repository.
+Wardlume is source-available and isn't signed with a paid Apple Developer certificate, so on first launch macOS shows a warning that it *"could not verify Wardlume is free of malware."* This is expected for apps distributed outside the App Store — you can read every line of what Wardlume does in this repository.
 
 **To open it (macOS Sequoia 15 / Tahoe 26):**
 
@@ -262,7 +261,7 @@ Read the detailed roadmap and milestone breakdown in [ROADMAP.md](ROADMAP.md).
 
 ## Contributing
 
-Wardlume is open source, and we welcome contributions from the community.
+Wardlume is source-available, and we welcome contributions from the community.
 Whether you are debugging low-level AppKit behaviors, writing custom shaders, or
 proposing new features, your help is appreciated.
 
@@ -274,7 +273,11 @@ proposing new features, your help is appreciated.
 
 ## License
 
-Wardlume is released under the MIT License. See [LICENSE](LICENSE) for details.
+Wardlume is **source-available** under the [PolyForm Noncommercial License 1.0.0](LICENSE) — you're free to view, modify, and use it for any noncommercial purpose (personal use, study, hobby projects, nonprofits, education). Commercial use is reserved by the maintainer.
+
+Contributions are welcome under the terms in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+> Versions through v1.0.1 were released under the MIT License and remain available under those terms. Relicensing applies to development from v1.0.2 onward.
 
 ---
 
