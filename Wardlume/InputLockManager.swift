@@ -71,6 +71,13 @@ final class InputLockManager: NSObject {
     /// Updated on the main thread; nonisolated(unsafe) for callback access.
     nonisolated(unsafe) var reactionWindowID: CGWindowID?
 
+    /// CGWindowIDs of the secondary-display blackout windows (one per non-primary
+    /// screen). Like the ward overlay, these are Wardlume-owned windows that must
+    /// be CONSUMED, not whitelisted — otherwise a click on a blacked-out second
+    /// monitor would leak through to the app behind it. Set on activate, cleared
+    /// on uninstall. Mutated on the main thread; read in the callback.
+    nonisolated(unsafe) private var secondaryOverlayIDs: Set<CGWindowID> = []
+
     /// Wardlume's process ID, used to identify our windows via CGWindowListCopyWindowInfo
     /// without touching @MainActor-isolated NSApp.windows from a nonisolated context.
     nonisolated(unsafe) private var wardlumePID: pid_t = 0
@@ -84,24 +91,15 @@ final class InputLockManager: NSObject {
     nonisolated(unsafe) private var cachedScreenHeight: CGFloat = 800
 
     // -------------------------------------------------------------------------
-    // MARK: — Escape hotkey callback (Phase 2a fix)
+    // MARK: — Unlock hotkey callback
     // -------------------------------------------------------------------------
-
-    /// Called (on the main thread) when Cmd+Shift+W is intercepted.
-    /// Set by AppDelegate to invoke toggleWard().
-    ///
-    /// Why not NSEvent.addGlobalMonitorForEvents?
-    /// Global NSEvent monitors are implemented internally as listen-only CGEventTaps.
-    /// When our head-insert read-write tap returns nil, the event is removed from
-    /// the pipeline before any other tap — including NSEvent monitors — can observe it.
-    /// Detecting the shortcut here, inside handleEvent(), is the only reliable approach.
-    nonisolated(unsafe) var onEscapeHotkey: (() -> Void)?
 
     /// Called (on the main thread) when Cmd+Shift+U is intercepted.
     /// Set by AppDelegate to invoke BiometricUnlockManager.evaluateUnlock(...).
-    /// Same architectural rationale as onEscapeHotkey: handled inside the
-    /// CGEventTap callback because global NSEvent monitors do not observe
-    /// events our head-insert read-write tap consumes.
+    ///
+    /// Handled inside the CGEventTap callback (not via NSEvent.addGlobalMonitorForEvents)
+    /// because global NSEvent monitors are implemented as listen-only taps and cannot
+    /// observe events our head-insert read-write tap consumes.
     nonisolated(unsafe) var onUnlockHotkey: (() -> Void)?
 
     /// Called (on the main thread) when an input event is consumed as an intrusion.
@@ -157,8 +155,14 @@ final class InputLockManager: NSObject {
     /// - Parameter wardWindow: The magical ward overlay window. Events landing
     ///   on this window are consumed (blocked). All other Wardlume windows are
     ///   whitelisted so menus, alerts, and future UI remain accessible.
-    func install(view: MetalOverlayView, wardWindow: NSWindow) {
-        guard tapRef == nil else { return }
+    /// - Returns: `true` if the tap was created and enabled (input is now locked),
+    ///   `false` if `CGEvent.tapCreate` failed (e.g. a TCC permission was revoked
+    ///   between the preflight check and here). On `false` the caller MUST tear
+    ///   down the ward overlay — otherwise a "locked-looking" screen would be left
+    ///   on top of a fully interactive system.
+    @discardableResult
+    func install(view: MetalOverlayView, wardWindow: NSWindow) -> Bool {
+        guard tapRef == nil else { return true }
         metalView = view
 
         // Cache whitelist identifiers while on the main thread.
@@ -173,6 +177,18 @@ final class InputLockManager: NSObject {
         menuBarThreshold = NSStatusBar.system.thickness + 8
 
         // Intercept all keyboard and pointer event classes.
+        //
+        // kCGEventTabletPointer / kCGEventTabletProximity (raw values 23 / 24) are
+        // included so a paired stylus / drawing tablet cannot drive the system
+        // while the ward is up — these are NOT covered by the mouse event types.
+        // (CGEventType has no Swift case for them, so the raw values are used.)
+        //
+        // NSEventTypeSystemDefined (media / brightness / volume / play-pause keys)
+        // is delivered as a Quartz event of type 14. We intercept it so an intruder
+        // can't change volume/brightness or drive media playback through the lock.
+        let kTabletPointer:   UInt32 = 23
+        let kTabletProximity: UInt32 = 24
+        let kSystemDefined:   UInt32 = 14
         let mask: CGEventMask =
             (1 << CGEventType.keyDown.rawValue)          |
             (1 << CGEventType.keyUp.rawValue)             |
@@ -187,7 +203,10 @@ final class InputLockManager: NSObject {
             (1 << CGEventType.otherMouseDown.rawValue)    |
             (1 << CGEventType.otherMouseUp.rawValue)      |
             (1 << CGEventType.otherMouseDragged.rawValue) |
-            (1 << CGEventType.scrollWheel.rawValue)
+            (1 << CGEventType.scrollWheel.rawValue)        |
+            (1 << kTabletPointer)                          |
+            (1 << kTabletProximity)                        |
+            (1 << kSystemDefined)
 
         // passUnretained: AppDelegate holds a strong reference to this object
         // for the entire lifetime of an active ward session.
@@ -203,7 +222,8 @@ final class InputLockManager: NSObject {
         else {
             print("Wardlume [InputLockManager]: CGEventTapCreate failed. " +
                   "Accessibility or Input Monitoring permission may be missing.")
-            return
+            metalView = nil   // we never armed; don't hold a stale view reference
+            return false
         }
         tapRef = tap
 
@@ -227,6 +247,20 @@ final class InputLockManager: NSObject {
 
         print("Wardlume [InputLockManager]: event tap installed. " +
               "wardWindowID=\(wardWindowID) wardlumePID=\(wardlumePID)")
+        return true
+    }
+
+    /// True if a tap is currently installed and armed. Used by AppDelegate's
+    /// sleep/wake handling to detect a ward that *looks* active (overlay still on
+    /// screen) but whose tap was torn down by the OS (e.g. on system sleep).
+    var isLocked: Bool { tapRef != nil }
+
+    /// Registers a secondary-display blackout window so the callback consumes
+    /// clicks landing on it (treats it like the ward overlay) instead of
+    /// whitelisting it as a generic Wardlume window. Call once per secondary
+    /// window at activation. Cleared automatically by uninstall().
+    func registerSecondaryOverlay(_ id: CGWindowID) {
+        secondaryOverlayIDs.insert(id)
     }
 
     /// Disables and removes the CGEventTap. Idempotent — safe to call when
@@ -244,6 +278,8 @@ final class InputLockManager: NSObject {
             NSEvent.removeMonitor(monitor)
             gestureMonitor = nil
         }
+        secondaryOverlayIDs.removeAll()
+        reactionWindowID = nil
         metalView = nil
         print("Wardlume [InputLockManager]: event tap uninstalled.")
     }
@@ -264,36 +300,30 @@ final class InputLockManager: NSObject {
         // ── Step 1: Tap-disabled re-enable ────────────────────────────────────
         // macOS can disable the tap if the callback is too slow.
         // Re-enabling here keeps the lock active across any transient hiccups.
+        //
+        // We CONSUME (return nil) the triggering event rather than passing it
+        // through: the event that tripped the timeout is, by definition, one we
+        // would otherwise have evaluated for the lock. Passing it through would
+        // leak that single input to the system during the disable→re-enable gap.
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             print("Wardlume [InputLockManager]: ⚠️ TAP DISABLED type=\(type.rawValue), re-enabling")
             if let tap = tapRef { CGEvent.tapEnable(tap: tap, enable: true) }
-            return Unmanaged.passUnretained(event)
+            return nil
         }
 
-        // ── Step 2: Cmd+Shift+W escape hotkey ────────────────────────────────
+        // ── Step 2: Cmd+Shift+U unlock hotkey ────────────────────────────────
         // Detected BEFORE any consume decision so it always fires.
         //
-        // We handle this here (inside the tap callback) rather than via
-        // NSEvent.addGlobalMonitorForEvents because global NSEvent monitors are
-        // themselves listen-only CGEventTaps: when our head-insert read-write tap
-        // returns nil, the event is removed from the pipeline before any monitor
-        // (including global ones) can observe it.
+        // Handled here (inside the tap callback) rather than via
+        // NSEvent.addGlobalMonitorForEvents — global NSEvent monitors are listen-only
+        // taps and cannot observe events our head-insert read-write tap consumes.
         //
-        // Keycode 13 = the 'W' physical key on standard keyboard layouts.
+        // Keycode 32 = the 'U' physical key on standard keyboard layouts.
+        // Cmd+Shift+W (keycode 13) is intentionally NOT intercepted here — it is
+        // consumed silently like any other keystroke while the ward is active.
         if type == .keyDown {
             let keycode = event.getIntegerValueField(.keyboardEventKeycode)
             let flags   = event.flags
-            if keycode == 13 &&
-               flags.contains(.maskCommand) && flags.contains(.maskShift) {
-                // Dispatch async to avoid blocking the tap callback with heavy work
-                // (ward destruction, window cleanup).
-                if let cb = onEscapeHotkey {
-                    DispatchQueue.main.async { cb() }
-                }
-                return nil   // consume the keystroke; apps underneath don't see it
-            }
-
-            // Keycode 32 = the 'U' physical key on standard keyboard layouts.
             if keycode == 32 &&
                flags.contains(.maskCommand) && flags.contains(.maskShift) {
                 // Dispatch async to avoid blocking the tap callback with heavy work
@@ -325,80 +355,42 @@ final class InputLockManager: NSObject {
         // If we ever switch to NSWindow.frame, the conversion is:
         //   appKitY = cachedScreenHeight − event.location.y
 
-        // ── Fast path: menu bar strip ─────────────────────────────────────────
-        // Passes through mouse/scroll events in the top strip so the status-bar
-        // icon stays clickable. Quartz y < menuBarThreshold = near the top of
-        // the screen = in the menu bar.
         let isMouse = type == .leftMouseDown   || type == .leftMouseUp    ||
                       type == .rightMouseDown  || type == .rightMouseUp   ||
                       type == .scrollWheel
         let isMove  = type == .mouseMoved      || type == .leftMouseDragged  ||
                       type == .rightMouseDragged || type == .otherMouseDragged
 
-        if (isMouse || isMove) && loc.y < menuBarThreshold {
+        // System-defined events (media / brightness / volume / play-pause keys)
+        // and tablet events have no meaningful window location — they target the
+        // system or focused app, not a point on screen. There is no Wardlume UI
+        // to whitelist for them, so they always fall through to consume below.
+        // (We simply don't run the location-based whitelist for them.)
+
+        // ── Fast path: menu-bar strip ─────────────────────────────────────────
+        // The top `menuBarThreshold` pts is the system menu bar, which contains
+        // far more than our status item: the Apple menu (Restart / Shut Down /
+        // Log Out), Control Center, Wi-Fi, the clock, and OTHER apps' status
+        // items. Blindly passing the whole strip through would let an intruder
+        // restart the Mac or open Control Center. So we run the SAME ownership
+        // check as the full whitelist — a click in the strip is passed through
+        // ONLY if it lands on a Wardlume-owned window (our status item / its
+        // menu). Everything else in the strip is consumed.
+        //
+        // Move/drag events that fall in the strip are passed through (cursor can
+        // travel over the menu bar); a bare cursor move triggers no action, and
+        // running the window-list lookup on every pixel of motion is wasteful.
+        if isMove && loc.y < menuBarThreshold {
             return Unmanaged.passRetained(event)
         }
 
-        // ── Full path: Wardlume window whitelist (action events only) ─────────
-        // Lets events through if they land inside a Wardlume-owned window that
-        // is NOT the ward overlay. This covers:
-        //   • The NSMenu dropdown panel ("Deactivate Ward", "Quit")
-        //   • NSAlert dialogs
-        //   • Any future settings windows
-        //
-        // CGWindowListCopyWindowInfo returns windows in z-order (front → back).
-        // Wardlume already has Screen Recording permission (Phase 1c), which
-        // satisfies the TCC requirement for this API.
-        //
-        // NSApp.windows cannot be used here because NSApplication.windows is
-        // @MainActor-isolated; accessing it from a nonisolated function is a
-        // Swift 6 compile error even though we're actually on the main thread.
-        //
-        // CRITICAL FIX: The ward overlay window is full-screen, so it will always
-        // be the first window in z-order that contains any click location. We must
-        // continue checking ALL Wardlume windows at the click location, not break
-        // after finding the first one. If we find a non-ward Wardlume window
-        // (e.g., the menu dropdown), whitelist it. Only break when we find a
-        // non-Wardlume window.
-        if isMouse {
-            let windowList = CGWindowListCopyWindowInfo(
-                [.optionOnScreenOnly, .excludeDesktopElements],
-                kCGNullWindowID) as? [[String: Any]] ?? []
-
-            for info in windowList {
-                guard
-                    let bounds = info[kCGWindowBounds as String] as? [String: CGFloat],
-                    let pid    = info[kCGWindowOwnerPID as String] as? Int32,
-                    let wid    = info[kCGWindowNumber as String] as? CGWindowID
-                else { continue }
-
-                // kCGWindowBounds values are in Quartz coordinates — same system
-                // as event.location — so no y-flip is needed here.
-                let quartzRect = CGRect(
-                    x: bounds["X"] ?? 0, y: bounds["Y"] ?? 0,
-                    width: bounds["Width"] ?? 0, height: bounds["Height"] ?? 0)
-
-                guard quartzRect.contains(loc) else { continue }
-
-                // Found a window at this screen position.
-                if pid == wardlumePID {
-                    // This is a Wardlume window.
-                    if wid == wardWindowID || wid == reactionWindowID {
-                        // It IS the ward overlay or reaction overlay. Continue
-                        // checking — there might be another Wardlume window
-                        // (like a menu dropdown) underneath.
-                        continue
-                    } else {
-                        // It's NOT the ward or reaction overlay (e.g., menu dropdown, alert).
-                        // Whitelist it — let the event through.
-                        return Unmanaged.passRetained(event)
-                    }
-                } else {
-                    // This is NOT a Wardlume window. The click landed on another
-                    // app's window or the desktop. Stop searching — consume.
-                    break
-                }
-            }
+        // ── Wardlume window whitelist (clicks/scrolls only) ───────────────────
+        // Lets events through only if they land inside a Wardlume-owned window
+        // that is NOT the ward/reaction overlay. This covers the status item and
+        // its NSMenu dropdown, NSAlert dialogs, and any future Wardlume UI.
+        // Applies everywhere on screen, including the menu-bar strip (above).
+        if isMouse && pointHitsWhitelistedWardlumeWindow(loc) {
+            return Unmanaged.passRetained(event)
         }
 
         // ── Step 4: Intrusion pulse + consume ─────────────────────────────────────
@@ -422,5 +414,56 @@ final class InputLockManager: NSObject {
         }
 
         return nil   // consume — event is silently discarded
+    }
+
+    /// Returns true if the screen point lands on a Wardlume-owned window that is
+    /// NOT the ward overlay or reaction overlay — i.e. our status item, its menu
+    /// dropdown, an NSAlert, or any other Wardlume UI that must stay clickable.
+    ///
+    /// Walks CGWindowListCopyWindowInfo in z-order (front → back). The ward and
+    /// reaction overlays are full-screen and always on top, so they're skipped so
+    /// we can see whatever Wardlume window sits beneath them. The FIRST window at
+    /// the point that is NOT one of our overlays decides the answer:
+    ///   • Wardlume-owned → true  (whitelist: let the event through)
+    ///   • another app / desktop → false (consume)
+    ///
+    /// CGWindowListCopyWindowInfo bounds are in Quartz coords — the same system
+    /// as event.location — so no y-flip is needed. NSApp.windows can't be used
+    /// here: it's @MainActor-isolated and this runs from the nonisolated callback.
+    nonisolated private func pointHitsWhitelistedWardlumeWindow(_ loc: CGPoint) -> Bool {
+        let windowList = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID) as? [[String: Any]] ?? []
+
+        for info in windowList {
+            guard
+                let bounds = info[kCGWindowBounds as String] as? [String: CGFloat],
+                let pid    = info[kCGWindowOwnerPID as String] as? Int32,
+                let wid    = info[kCGWindowNumber as String] as? CGWindowID
+            else { continue }
+
+            let quartzRect = CGRect(
+                x: bounds["X"] ?? 0, y: bounds["Y"] ?? 0,
+                width: bounds["Width"] ?? 0, height: bounds["Height"] ?? 0)
+
+            guard quartzRect.contains(loc) else { continue }
+
+            if pid == wardlumePID {
+                if wid == wardWindowID || wid == reactionWindowID
+                    || secondaryOverlayIDs.contains(wid) {
+                    // One of our full-screen overlays (ward / reaction / secondary
+                    // blackout) — must be consumed, so keep scanning beneath it for
+                    // a genuinely-clickable Wardlume window (menu, alert).
+                    continue
+                }
+                // A non-overlay Wardlume window (status item, menu, alert).
+                return true
+            } else {
+                // Topmost non-overlay window here belongs to another app or the
+                // desktop. Not whitelisted.
+                return false
+            }
+        }
+        return false
     }
 }

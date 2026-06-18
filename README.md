@@ -35,7 +35,10 @@ in real time.
 - ✨ **Universal Escape Hotkey**: Immediate ward deactivation via the
   `Cmd+Shift+W` keyboard combination. This shortcut is routed directly inside
   the low-level event tap callback for high reliability, even if the main
-  window loses system focus.
+  window loses system focus. A keep-on-top watchdog also guards against macOS
+  window-management shortcuts that could push the ward to the back: if the
+  overlay is displaced it is re-raised, and if it can't be recovered Wardlume
+  falls back to the real macOS lock screen so the Mac is never left exposed.
 - ✨ **Touch ID Prompt Hotkey**: A dedicated `Cmd+Shift+U` hotkey to manually
   summon the biometric authentication prompt at any time while the ward is
   active, bypassing the need to interact with the menu bar.
@@ -51,35 +54,34 @@ in real time.
 - ✨ **Minimal Shader Mode** *(v0.2.2)*: The default Silent Professional pack uses a sober refraction-only shader — no rainbow border, sigils, or motes. A calm productivity shield that keeps your terminal readable underneath.
 - ✨ **Corner Watching Indicator** *(v0.2.3)*: Silent Professional shows a small pill-shaped indicator with a watching eye in the bottom-right corner during ward — a quiet “yes, the ward is active” signal that flashes red on input intrusion.
 - ✨ **Global Activation Hotkey** *(v1.0.1)*: Press ⌘⇧L from anywhere — even while focused in your IDE — to activate or deactivate the ward instantly. No need to click the menu bar.
-- ✨ **Quick Pack Switching** *(v1.0.1)*: Switch between Silent Professional, Grumpy Old Man, and Wizard directly from the menu bar dropdown, without opening Preferences.
 
-## Reaction Packs
+## Reaction Pack
 
-Wardlume ships with three built-in reaction packs that respond differently when input is detected during ward:
+Wardlume ships with the **Silent Professional** reaction pack:
 
-- **Silent Professional** — The default. Sober refracted glass over your live desktop, with a small watching-eye indicator in the corner. No characters, no theatrics — designed for users who want to monitor their terminal mid-AI-session without being tempted to touch.
-- **Grumpy Old Man** — Character pack. Shows an old man watching your desktop continuously; an angry reaction image flashes on input intrusion. Audio plays.
-- **Wizard** — Character pack. Shows a wizard scene; a wizard reaction flashes on intrusion. Audio plays.
+- **Silent Professional** — The default. Sober refracted glass over your live desktop, with a small watching-eye indicator in the corner. No characters, no theatrics — designed for users who want to monitor their terminal mid-AI-session without being tempted to touch. On intrusion it shows a calm "Input locked" overlay rather than theatrics.
 
-Switch packs in Preferences (Cmd+,).
+You can fully personalize the reaction with your own assets (see below) without writing code.
 
 ## Custom Assets
 
-Each reaction pack has three asset slots you can override:
+The reaction has three asset slots you can override:
 
 - **Base image** — shown continuously while ward is active (replaces the Metal shader for that activation)
 - **Reaction image** — flashes briefly when someone touches input
 - **Audio** — plays alongside the reaction image
 
-You can override any of these by dragging a file into the corresponding slot in Preferences (Cmd+,). Your uploads apply to whichever pack is selected — mix and match across packs without creating “custom packs” you have to manage.
+You can override any of these by dragging a file into the corresponding slot in Preferences (Cmd+,).
 
 Supported formats:
 - Images: PNG, JPEG, HEIC, GIF (max 10MB)
 - Audio: MP3, M4A, WAV (max 10MB)
 
-Click ✕ on any slot to revert to the active pack’s bundled default.
+Uploaded files are validated as genuinely decodable images / playable audio at import time — a renamed or corrupt file is rejected with a clear message rather than silently failing later. Adding a base or reaction image gives the Silent Professional ward your own visuals; with no override it stays a sober text-only shield.
 
-<!-- TODO: add screenshots: Preferences UI with three slots, silentProfessional ward with corner indicator, Grumpy/Wizard ward states -->
+Click ✕ on any slot to revert to the bundled default.
+
+<!-- TODO: add screenshots: Preferences UI with three slots, silentProfessional ward with corner indicator -->
 
 ## Quick Demo
 
@@ -100,8 +102,8 @@ this process will be added here in the future:
    quietly in your macOS menu bar.
 2. **Configure Settings (Optional)**: Adjust shader parameters or hotkeys via the
    menu bar dropdown prior to activation.
-3. **Activate the Ward**: Press **⌘⇧L** from anywhere, or click the menu bar icon and select **Activate Ward**. You can also pick a reaction pack from the menu first (Silent Professional, Grumpy Old Man, or Wizard).
-4. **Walk Away**: Your desktop is now under an animated glass overlay. Keyboard, mouse, and trackpad are locked. Anyone passing by can watch the screen but cannot interact with it. After a few seconds, an on-screen hint appears showing how to unlock.
+3. **Activate the Ward**: Press **⌘⇧L** from anywhere, or click the menu bar icon and select **Activate Ward**.
+4. **Walk Away**: Your desktop is now under an animated glass overlay. Keyboard, mouse, and trackpad are locked. On multi-monitor setups, secondary displays are blacked out so no screen is left interactive. Anyone passing by can watch the primary screen but cannot interact with it. After a few seconds, an on-screen hint appears showing how to unlock.
 5. **Return and Unlock**: Rest your finger on the Touch ID sensor, or press **⌘⇧U** to bring up biometric authentication. Press **⌘⇧L** to toggle the ward off directly. Once authenticated, the ward dissolves and input control is restored instantly.
 
 ## Installation and Building
@@ -247,15 +249,16 @@ lock except for catching inputs to trigger intrusion indicators.
 
 ## Roadmap
 
-Wardlume uses semantic versioning. Current latest: **v1.0.0**.
+Wardlume uses semantic versioning. Current latest: **v1.1.0**.
 
 **Shipped:**
-- **v1.0.1** — Global activation hotkey (⌘⇧L), quick pack switching from the menu, on-screen unlock hint, UI polish
-- **v1.0.0** — First public release. Full feature set: animated Metal overlay, input lock, Touch ID unlock, three reaction packs, bait-and-switch model, custom asset slots
+- **v1.1.0** — Security hardening: Cmd+Shift+W keep-on-top watchdog with macOS lock-screen fallback, menu-bar pass-through closed, multi-display blackout, fail-closed activation, sleep/wake & capture-loss teardown, wider input interception, validated atomic asset import, biometric debounce. Reaction packs reduced to Silent Professional.
+- **v1.0.1** — Global activation hotkey (⌘⇧L), on-screen unlock hint, UI polish
+- **v1.0.0** — First public release. Full feature set: animated Metal overlay, input lock, Touch ID unlock, reaction packs, bait-and-switch model, custom asset slots
 - **v0.2.3** and earlier — Development line (see [ROADMAP.md](ROADMAP.md) for full history)
 
 **Next:**
-- **v1.1+** — Direction TBD. Possible: community pack format, Apple Watch proximity unlock, configurable hotkeys, multi-pack rotation, additional reaction triggers. Open for community input — see issues labeled `roadmap-discussion` or open a GitHub Discussion.
+- **v1.1+** — Direction TBD. Possible: community pack format, Apple Watch proximity unlock, configurable hotkeys, additional reaction triggers. Open for community input — see issues labeled `roadmap-discussion` or open a GitHub Discussion.
 
 Read the detailed roadmap and milestone breakdown in [ROADMAP.md](ROADMAP.md).
 

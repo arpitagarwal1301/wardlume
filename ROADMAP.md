@@ -2,6 +2,18 @@
 
 ## Shipped
 
+### v1.1.0 — Security hardening & pack simplification
+- [x] **Cmd+Shift+W keep-on-top watchdog** — detects the macOS window-management side-effect that pushed the ward to the back; re-raises the overlay up to 3× and falls back to the real macOS lock screen (`SACLockScreenImmediate`) if it can't recover
+- [x] **Menu-bar strip no longer pass-through** — clicks in the top strip now run the same Wardlume-owner check as the rest of the screen, so the Apple menu (Restart/Shut Down/Log Out), Control Center, and other apps' status items can't be used while warded (only our own status item passes)
+- [x] **Multi-display blackout** — every non-primary display is covered by an opaque, input-consuming overlay during ward (previously secondary monitors kept showing the live desktop)
+- [x] **Fail-closed activation** — `install()` now reports success; if the event tap can't arm (e.g. permission revoked mid-launch), the ward tears down and alerts instead of showing a locked-looking but interactive screen
+- [x] **Sleep/wake teardown** — ward deactivates on system/screen sleep so it can't wake into a dead-tap "looks locked, isn't" state
+- [x] **Capture-loss teardown** — if Screen Recording is revoked mid-session the ward deactivates instead of freezing on a stale frame
+- [x] **Wider input interception** — event mask now also covers system-defined (media/brightness/volume) and tablet/stylus events; tap-timeout now consumes the triggering event instead of leaking it
+- [x] **Asset import validation** — user-dropped files are verified decodable (image)/playable (audio) and copied atomically (temp → validate → swap), so a corrupt/renamed file is rejected and a failed copy can't destroy the existing slot
+- [x] **Biometric unlock debounce** — rapid ⌘⇧U presses no longer stack SecurityAgent prompts
+- [x] **Reaction packs reduced to Silent Professional** — the Grumpy Old Man and Wizard character packs were removed; a user reaction-image override no longer silently converts the minimal pack into a full-screen image
+
 ### v1.0.1 — Usability polish
 - [x] Global activation hotkey (⌘⇧L) — toggle the ward from anywhere, even while focused in another app (Carbon RegisterEventHotKey, consumed so it doesn't leak to the foreground app)
 - [x] Quick pack switching from the menu bar dropdown (no need to open Preferences)

@@ -49,6 +49,14 @@ import Combine
 ///   1. Instantiate once in AppDelegate.applicationDidFinishLaunching.
 ///   2. Wire InputLockManager.onIntrusion → reactionManager.trigger().
 ///   3. Call dismissReaction() on any ward-deactivation path.
+///
+/// @MainActor: all reaction state (reactionWindow, reactionWindowID, lastFiredAt,
+/// audioPlayer) is touched only from the main thread today — the CGEventTap
+/// callback dispatches onIntrusion async to main, and the SwiftUI settings UI
+/// mutates on main. Annotating the class makes that contract compiler-enforced so
+/// a future off-main caller fails loudly instead of silently racing the shared
+/// audioPlayer / window state read by the nonisolated tap callback.
+@MainActor
 final class ReactionManager: ObservableObject {
 
     // -------------------------------------------------------------------------
@@ -308,16 +316,17 @@ final class ReactionManager: ObservableObject {
         //   .image + file missing → ImageReactionView (placeholder + log)
         window.contentView = ReactionOverlayView.make(pack: pack, frame: screenFrame)
 
-        window.makeKeyAndOrderFront(nil)
+        // Register the reaction window ID with InputLockManager BEFORE the window
+        // is shown, so the tap treats it as consume-not-whitelist from the very
+        // first frame it can appear on screen. Registering after makeKeyAndOrderFront
+        // would leave a gap where the full-screen window is topmost but its ID is
+        // not yet known, and a click in that gap could leak through the whitelist.
+        let wid = CGWindowID(window.windowNumber)
+        inputLockManager?.reactionWindowID = wid
         reactionWindow = window
 
-        // Inform InputLockManager of the reaction window ID so it can be
-        // treated identically to the ward overlay (consumed, not whitelisted).
-        inputLockManager?.reactionWindowID = CGWindowID(window.windowNumber)
+        window.makeKeyAndOrderFront(nil)
 
-        // Log the reaction window ID so InputLockManager's whitelist can be
-        // extended in a future phase if needed.
-        let wid = CGWindowID(window.windowNumber)
         print("Wardlume [ReactionManager]: reaction window on screen (CGWindowID=\(wid))")
 
         // ── Audio ─────────────────────────────────────────────────────────────
@@ -337,14 +346,17 @@ final class ReactionManager: ObservableObject {
 
     private func tearDownReactionWindow() {
         guard let window = reactionWindow else { return }
-        // Clear the reaction window ID from InputLockManager
-        inputLockManager?.reactionWindowID = nil
         // Stop any in-progress audio so it doesn't outlive the overlay window.
         audioPlayer?.stop()
         audioPlayer = nil
+        // Remove the window from screen FIRST, then clear the ID. This keeps the
+        // invariant "reactionWindowID is set whenever the reaction window is on
+        // screen" true even if teardown ever re-enters the run loop — symmetric
+        // with the register-before-show ordering in showReaction().
         window.orderOut(nil)
         window.close()
         reactionWindow = nil
+        inputLockManager?.reactionWindowID = nil
     }
 
     // -------------------------------------------------------------------------

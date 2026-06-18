@@ -28,6 +28,7 @@
 //  ────────────────────────────────────────────────────────────────────────────
 
 import AppKit
+import AVFoundation
 import Combine
 
 // ---------------------------------------------------------------------------
@@ -55,6 +56,10 @@ enum UserAssetError: Error, LocalizedError, Identifiable {
     /// File could not be copied to the asset slot directory.
     case copyFailed(underlying: Error)
 
+    /// The file extension is allowed but the contents are not a decodable
+    /// image / playable audio file (e.g. a renamed or corrupt file).
+    case undecodableContent
+
     // Identifiable conformance
     var id: String { errorDescription ?? String(describing: self) }
 
@@ -72,6 +77,8 @@ enum UserAssetError: Error, LocalizedError, Identifiable {
             return "Could not access the source file. Check that it still exists and you have permission to read it."
         case .copyFailed(let err):
             return "Could not copy file to asset directory: \(err.localizedDescription)"
+        case .undecodableContent:
+            return "That file could not be read as a valid image or audio file. It may be corrupt or not the type its extension claims."
         }
     }
 }
@@ -277,19 +284,73 @@ final class UserAssetManager: ObservableObject {
             throw UserAssetError.copyFailed(underlying: error)
         }
 
-        // ── 4. Delete existing slot file ──────────────────────────────────────
-        deleteSlot(slot)
-
-        // ── 5. Copy source to slot ────────────────────────────────────────────
+        // ── 4. Copy to a TEMP file first (atomic + non-destructive) ───────────
+        // We copy to a unique temp name, validate decodability, and only then
+        // replace the existing slot. This fixes two problems with delete-then-copy:
+        //   • Delete-before-copy data loss: a failed copy would have already
+        //     destroyed the prior asset. Here the existing slot is untouched until
+        //     the new file is fully copied AND validated.
+        //   • TOCTOU on the size check: we re-stat the copied temp file (its size
+        //     is now fixed on disk) and re-enforce the limit before committing.
+        let fileManager = FileManager.default
         let destination = assetsDir.appendingPathComponent("\(slot.prefix).\(sourceExt)")
+        let tempDestination = assetsDir.appendingPathComponent(".\(slot.prefix).incoming.\(sourceExt)")
+        try? fileManager.removeItem(at: tempDestination)   // clear any stale temp
+
         do {
-            try FileManager.default.copyItem(at: sourceURL, to: destination)
+            try fileManager.copyItem(at: sourceURL, to: tempDestination)
         } catch {
             throw UserAssetError.copyFailed(underlying: error)
         }
 
-        // ── 6. Refresh @Published ─────────────────────────────────────────────
+        // Anything thrown from here on must clean up the temp file.
+        func cleanupTemp() { try? fileManager.removeItem(at: tempDestination) }
+
+        // ── 5. Re-check size on the copied file (closes the size-check TOCTOU) ─
+        if let copiedSize = (try? fileManager.attributesOfItem(atPath: tempDestination.path))?[.size] as? Int,
+           copiedSize > Self.maxFileSizeBytes {
+            cleanupTemp()
+            throw UserAssetError.fileTooLarge(sizeBytes: copiedSize)
+        }
+
+        // ── 6. Validate decodability (extension is not enough) ────────────────
+        // A file renamed to an allowed extension, or a corrupt file, would
+        // otherwise be stored as a silently-broken slot. Reject it here.
+        if !Self.fileIsDecodable(tempDestination, isAudio: supportedExtensions == Self.supportedAudioExtensions) {
+            cleanupTemp()
+            throw UserAssetError.undecodableContent
+        }
+
+        // ── 7. Commit: delete old slot, move temp into place ──────────────────
+        // Both steps happen only after the new file is validated, so a failure
+        // can never leave the slot empty with the prior asset already gone.
+        deleteSlot(slot)
+        do {
+            try fileManager.moveItem(at: tempDestination, to: destination)
+        } catch {
+            cleanupTemp()
+            throw UserAssetError.copyFailed(underlying: error)
+        }
+
+        // ── 8. Refresh @Published ─────────────────────────────────────────────
         scan()
+    }
+
+    /// Verifies that the file at `url` is actually a decodable image or playable
+    /// audio file — not just something with an allowed extension. Used to reject
+    /// renamed / corrupt files at import time so the user gets clear feedback
+    /// instead of a silently-broken slot.
+    private static func fileIsDecodable(_ url: URL, isAudio: Bool) -> Bool {
+        if isAudio {
+            // AVAudioFile fails to open data that isn't valid, decodable audio.
+            return (try? AVAudioFile(forReading: url)) != nil
+        } else {
+            // NSImage(contentsOf:) returns nil for non-image / corrupt data, and
+            // we additionally require at least one bitmap representation so a
+            // zero-byte or header-only file is rejected.
+            guard let image = NSImage(contentsOf: url) else { return false }
+            return !image.representations.isEmpty
+        }
     }
 
     // ── Private: scan logic ───────────────────────────────────────────────────

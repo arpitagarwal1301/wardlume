@@ -4,6 +4,7 @@ import MetalKit
 import CoreGraphics
 import ScreenCaptureKit
 import Carbon.HIToolbox
+import Darwin   // dlopen/dlsym for the macOS lock-screen fallback
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenuDelegate {
     var statusBarItem: NSStatusItem?
@@ -52,6 +53,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     /// Wardlume is in the background and doesn’t leak to the foreground app.
     /// Held for the app’s lifetime; deinit unregisters automatically.
     private var activationHotkey: GlobalHotkey?
+
+    /// Blackout overlay windows covering every NON-primary display while the ward
+    /// is active. The Metal ward covers the primary display; these opaque-black
+    /// windows cover the rest so secondary screens aren't left showing the live,
+    /// un-warded desktop. Created on activate, closed on deactivate. Their window
+    /// IDs are registered with InputLockManager so clicks on them are consumed
+    /// (not whitelisted) — otherwise input would leak through to apps behind them.
+    private var secondaryOverlayWindows: [NSWindow] = []
+
+    /// Watchdog that keeps the ward window on top after activation. Detects if
+    /// the ward window is displaced / minimized and re-raises it. After
+    /// `maxWatchdogReraises` consecutive failed re-raises it escalates to the
+    /// real macOS lock screen. nil while the ward is inactive.
+    private var wardWatchdog: Timer?
+
+    /// Count of consecutive watchdog ticks where the ward was found displaced and
+    /// a re-raise was attempted. Reset to 0 as soon as the ward is verified back
+    /// on top. Escalates to the system lock screen when it reaches the cap.
+    private var watchdogReraiseCount = 0
+    private let maxWatchdogReraises = 3
+
+    /// True while a status-bar menu is open. menuWillOpen lowers the ward level to
+    /// .popUpMenu so the dropdown is clickable; the watchdog must not fight that by
+    /// re-raising / re-leveling the window during that window.
+    private var menuIsOpen = false
 
     // -------------------------------------------------------------------------
     // MARK: — Application launch
@@ -107,27 +133,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         toggleMenuItem?.keyEquivalentModifierMask = [.command, .shift]
         toggleMenuItem?.target = self
         menu.addItem(toggleMenuItem!)
-
-        // ── Pack switcher — also available in Preferences ─────────────────────
-        menu.addItem(NSMenuItem.separator())
-
-        let grumpyItem = NSMenuItem(title: "Set Pack: Grumpy Old Man",
-                                    action: #selector(debugSetPackGrumpy),
-                                    keyEquivalent: "")
-        grumpyItem.target = self
-        menu.addItem(grumpyItem)
-
-        let wizardItem = NSMenuItem(title: "Set Pack: Wizard",
-                                    action: #selector(debugSetPackWizard),
-                                    keyEquivalent: "")
-        wizardItem.target = self
-        menu.addItem(wizardItem)
-
-        let silentItem = NSMenuItem(title: "Set Pack: Silent Professional",
-                                    action: #selector(debugSetPackSilent),
-                                    keyEquivalent: "")
-        silentItem.target = self
-        menu.addItem(silentItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -200,6 +205,47 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // window IDs can be tracked (prevents reaction overlay from being
         // whitelisted and leaking input to background apps).
         reactionManager?.inputLockManager = inputLockManager
+
+        // Crash recovery: if a previous ward session crashed while gestures were
+        // disabled, GestureBlocker restores them here before anything else runs.
+        GestureBlocker.shared.recoverIfNeeded()
+
+        // macOS tears down CGEventTaps when the system sleeps. If we slept while
+        // warded, on wake the overlay window could still be on screen while the
+        // tap is dead — a screen that LOOKS locked but accepts all input. Tear
+        // the ward down on sleep/screen-lock so it can never wake into that state.
+        let wsCenter = NSWorkspace.shared.notificationCenter
+        wsCenter.addObserver(self, selector: #selector(systemWillSleep),
+                             name: NSWorkspace.willSleepNotification, object: nil)
+        wsCenter.addObserver(self, selector: #selector(systemWillSleep),
+                             name: NSWorkspace.screensDidSleepNotification, object: nil)
+        // Belt-and-suspenders: if we ever wake still holding an overlay whose tap
+        // is gone, tear down rather than present a fake lock.
+        wsCenter.addObserver(self, selector: #selector(systemDidWake),
+                             name: NSWorkspace.didWakeNotification, object: nil)
+    }
+
+    // -------------------------------------------------------------------------
+    // MARK: — Sleep / wake teardown
+    // -------------------------------------------------------------------------
+
+    /// On system sleep / screen sleep, deactivate the ward. The CGEventTap is
+    /// invalidated by the OS across sleep, so keeping the overlay up would leave
+    /// a locked-looking but fully-interactive screen on wake.
+    @objc private func systemWillSleep() {
+        guard overlayWindow != nil else { return }
+        print("Wardlume [AppDelegate]: system sleeping — tearing down ward to avoid a dead-tap lock on wake.")
+        deactivateWard()
+    }
+
+    /// On wake, if we somehow still hold an overlay but the tap is no longer
+    /// armed, tear the ward down — input would otherwise be unprotected behind it.
+    @objc private func systemDidWake() {
+        guard overlayWindow != nil else { return }
+        if inputLockManager?.isLocked != true {
+            print("Wardlume [AppDelegate]: woke with overlay up but tap dead — tearing down ward.")
+            deactivateWard()
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -207,280 +253,448 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     // -------------------------------------------------------------------------
 
     @objc func toggleWard() {
-        if let window = overlayWindow {
-            // --- Deactivate: stop input lock → stop capture → close window ---
-            inputLockManager?.uninstall()
-
-            // Dismiss any live reaction overlay immediately. Must happen before
-            // window.close() so no stale overlay outlives the ward session.
-            reactionManager?.dismissReaction()
-
-            // Phase 4b: remove base image view and resume Metal rendering
-            baseImageView?.removeFromSuperview()
-            baseImageView = nil
-
-            // Phase 5a-p2: stop breathing animation and remove corner indicator.
-            // Belt-and-suspenders alongside window.close() below: nils
-            // indicatorView in AppDelegate so the next activate cycle starts clean.
-            indicatorView?.layer?.removeAllAnimations()
-            indicatorView?.removeFromSuperview()
-            indicatorView = nil
-
-            // Tear down unlock hint. The asyncAfter fade-in uses [weak self] and
-            // guards on self?.unlockHintView, so if the ward is deactivated before
-            // the 4-second mark the guard fails — no crash, no orphaned animation.
-            unlockHintView?.layer?.removeAllAnimations()
-            unlockHintView?.removeFromSuperview()
-            unlockHintView = nil
-
-            if let metalView = window.contentView as? MetalOverlayView {
-                metalView.isPaused = false  // ready for next activation
-            }
-
-            captureManager?.stopCapture()
-            captureManager = nil
-
-            window.close()
-            overlayWindow         = nil
-            toggleMenuItem?.title = "Activate Ward"
-            toggleMenuItem?.keyEquivalent = "l"
-            toggleMenuItem?.keyEquivalentModifierMask = [.command, .shift]
-            unlockMenuItem?.isEnabled = false
-
+        if overlayWindow != nil {
+            deactivateWard()
         } else {
-            // --- Phase 2a: check Accessibility + Input Monitoring before locking.
-            if !InputLockManager.permissionsReady() {
-                InputLockManager.requestPermissions()
+            activateWard()
+        }
+    }
 
-                let alert = NSAlert()
-                alert.messageText     = "Accessibility & Input Monitoring Required"
-                alert.informativeText = """
-                    Wardlume needs Accessibility and Input Monitoring \
-                    permission to lock keyboard and mouse while the ward \
-                    is active.
+    /// Tears down the ward: stop watchdog → uninstall tap → dismiss reaction →
+    /// remove overlays (primary + secondary displays) → stop capture → reset menu.
+    /// Idempotent and safe to call from any teardown path (hotkey, sleep, install
+    /// failure, watchdog escalation, quit).
+    private func deactivateWard() {
+        guard let window = overlayWindow else { return }
 
-                    If a system dialog appeared, click Allow. Otherwise \
-                    open System Settings:
-                    • Privacy & Security → Accessibility → enable Wardlume
-                    • Privacy & Security → Input Monitoring → enable Wardlume
+        // Stop the keep-on-top watchdog first so it can't fight the teardown.
+        stopWardWatchdog()
 
-                    Relaunch Wardlume after granting both permissions.
-                    """
-                alert.alertStyle = .warning
-                alert.addButton(withTitle: "Open Privacy Settings")
-                alert.addButton(withTitle: "Cancel")
+        // Restore system gesture settings blocked during the ward session.
+        GestureBlocker.shared.deactivate()
 
-                if alert.runModal() == .alertFirstButtonReturn {
-                    // Open the pane for whichever permission is actually missing.
-                    // If both are missing, open Accessibility first — after granting and
-                    // relaunching, the next activation attempt routes to Input Monitoring.
-                    let pane: String
-                    if !InputLockManager.accessibilityGranted() {
-                        pane = "Privacy_Accessibility"
-                    } else {
-                        pane = "Privacy_ListenEvent"   // Input Monitoring pane
-                    }
-                    if let url = URL(string:
-                        "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
-                        NSWorkspace.shared.open(url)
-                    }
+        inputLockManager?.uninstall()
+
+        // Dismiss any live reaction overlay immediately. Must happen before
+        // window.close() so no stale overlay outlives the ward session.
+        reactionManager?.dismissReaction()
+
+        // Phase 4b: remove base image view and resume Metal rendering
+        baseImageView?.removeFromSuperview()
+        baseImageView = nil
+
+        // Phase 5a-p2: stop breathing animation and remove corner indicator.
+        indicatorView?.layer?.removeAllAnimations()
+        indicatorView?.removeFromSuperview()
+        indicatorView = nil
+
+        // Tear down unlock hint.
+        unlockHintView?.layer?.removeAllAnimations()
+        unlockHintView?.removeFromSuperview()
+        unlockHintView = nil
+
+        if let metalView = window.contentView as? MetalOverlayView {
+            metalView.isPaused = false  // ready for next activation
+        }
+
+        captureManager?.stopCapture()
+        captureManager = nil
+
+        // Close the secondary-display blackout windows.
+        for w in secondaryOverlayWindows { w.close() }
+        secondaryOverlayWindows.removeAll()
+
+        window.close()
+        overlayWindow         = nil
+        toggleMenuItem?.title = "Activate Ward"
+        toggleMenuItem?.keyEquivalent = "l"
+        toggleMenuItem?.keyEquivalentModifierMask = [.command, .shift]
+        unlockMenuItem?.isEnabled = false
+    }
+
+    /// Brings the ward up: permission gate → window(s) → capture → input lock.
+    private func activateWard() {
+        // --- Phase 2a: check Accessibility + Input Monitoring before locking.
+        if !InputLockManager.permissionsReady() {
+            InputLockManager.requestPermissions()
+
+            let alert = NSAlert()
+            alert.messageText     = "Accessibility & Input Monitoring Required"
+            alert.informativeText = """
+                Wardlume needs Accessibility and Input Monitoring \
+                permission to lock keyboard and mouse while the ward \
+                is active.
+
+                If a system dialog appeared, click Allow. Otherwise \
+                open System Settings:
+                • Privacy & Security → Accessibility → enable Wardlume
+                • Privacy & Security → Input Monitoring → enable Wardlume
+
+                Relaunch Wardlume after granting both permissions.
+                """
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Open Privacy Settings")
+            alert.addButton(withTitle: "Cancel")
+
+            if alert.runModal() == .alertFirstButtonReturn {
+                // Open the pane for whichever permission is actually missing.
+                // If both are missing, open Accessibility first — after granting and
+                // relaunching, the next activation attempt routes to Input Monitoring.
+                let pane: String
+                if !InputLockManager.accessibilityGranted() {
+                    pane = "Privacy_Accessibility"
+                } else {
+                    pane = "Privacy_ListenEvent"   // Input Monitoring pane
                 }
-                return
-            }
-
-            // --- Activate: create window, start capture, install input lock --
-            let screenFrame = NSScreen.main?.frame ?? .zero
-
-            let window = NSWindow(
-                contentRect: screenFrame,
-                styleMask:   [.borderless],
-                backing:     .buffered,
-                defer:       false)
-
-            window.isReleasedWhenClosed = false
-            window.level                = .screenSaver
-            window.isOpaque             = true
-            window.backgroundColor      = .black
-            window.hasShadow            = false
-
-            let metalView = MetalOverlayView(frame: screenFrame)
-            window.contentView = metalView
-
-            window.ignoresMouseEvents = true
-            window.makeKeyAndOrderFront(nil)
-
-            overlayWindow         = window
-            toggleMenuItem?.title = "Deactivate Ward"
-            toggleMenuItem?.keyEquivalent = ""
-            toggleMenuItem?.keyEquivalentModifierMask = []
-            unlockMenuItem?.isEnabled = true
-
-            // Phase 4b: layer base image above the Metal shader if one is resolved.
-            let activePack = reactionManager?.activePack ?? .silentProfessional
-            
-            // Phase 5a: set shader mode based on pack's shaderStyle
-            metalView.params.minimalMode = (activePack.shaderStyle == .minimal) ? 1.0 : 0.0
-            
-            if let baseURL = ReactionPack.resolvedBaseImageURL(for: activePack),
-               let image = NSImage(contentsOf: baseURL) {
-                let imageView = NSImageView(frame: metalView.bounds)
-                imageView.imageScaling = .scaleAxesIndependently
-                imageView.image = image
-                imageView.autoresizingMask = [.width, .height]
-                metalView.addSubview(imageView)
-                baseImageView = imageView
-                // Pause Metal rendering while occluded by opaque base image
-                metalView.isPaused = true
-                print("Wardlume [AppDelegate]: base image rendered, Metal paused")
-            } else {
-                baseImageView = nil
-                metalView.isPaused = false
-                print("Wardlume [AppDelegate]: no base image, Metal shader active")
-            }
-
-            // Phase 5a-p2: layer the pill indicator above Metal when the pack
-            // requests it and no base image is present (Phase 4b takes precedence).
-            if activePack.hasCornerIndicator && baseImageView == nil {
-                let pillW:  CGFloat = 80
-                let pillH:  CGFloat = 48
-
-                // Horizontally centered, above the unlock hint with a tight gap.
-                // Hint sits at y≈40 with height≈40pt, so its top edge ≈80pt.
-                // Eye pill bottom edge at y=93 → ~13pt gap between the two pills.
-                let pillX = (metalView.bounds.width - pillW) / 2
-                let pillY: CGFloat = 93
-
-                let pill = NSView(frame: CGRect(x: pillX, y: pillY,
-                                               width: pillW, height: pillH))
-                pill.wantsLayer = true
-                pill.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
-                pill.layer?.cornerRadius    = 14
-                pill.layer?.borderWidth     = 1
-                pill.layer?.borderColor     = NSColor.white.withAlphaComponent(0.15).cgColor
-                pill.alphaValue = 0.85
-
-                // eye.fill icon — 32pt light weight, white, centered in pill.
-                let config = NSImage.SymbolConfiguration(pointSize: 32, weight: .light)
-                if let symbol = NSImage(systemSymbolName: "eye.fill",
-                                        accessibilityDescription: "Ward active")?
-                                   .withSymbolConfiguration(config) {
-                    let iconSize: CGFloat = 36
-                    let iv = NSImageView(frame: CGRect(
-                        x: (pillW - iconSize) / 2,
-                        y: (pillH - iconSize) / 2,
-                        width:  iconSize,
-                        height: iconSize))
-                    iv.image            = symbol
-                    iv.imageScaling     = .scaleProportionallyDown
-                    iv.contentTintColor = .white
-                    pill.addSubview(iv)
-                }
-
-                metalView.addSubview(pill)
-                indicatorView = pill
-
-                if let layer = pill.layer {
-                    startBreathingAnimation(on: layer)
+                if let url = URL(string:
+                    "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
+                    NSWorkspace.shared.open(url)
                 }
             }
+            return
+        }
 
-            // Unlock hint — shown for ALL packs so users can always discover how to unlock.
-            // Fades in after a short delay to preserve the initial "magic" moment.
-            do {
-                // Attributed hint: "Press " + "⌘⇧U" (17pt semibold) + " to unlock"
-                // Mixing sizes inside one label so the shortcut symbols are clearly
-                // legible without making the surrounding words feel oversized.
-                let normalFont   = NSFont.monospacedSystemFont(ofSize: 13, weight: .medium)
-                let shortcutFont = NSFont.monospacedSystemFont(ofSize: 17, weight: .semibold)
-                let normalAttrs:   [NSAttributedString.Key: Any] = [.font: normalFont,   .foregroundColor: NSColor.white]
-                let shortcutAttrs: [NSAttributedString.Key: Any] = [.font: shortcutFont, .foregroundColor: NSColor.white]
+        // --- Activate: create window, start capture, install input lock --
+        let primaryScreen = NSScreen.main ?? NSScreen.screens.first
+        let screenFrame   = primaryScreen?.frame ?? .zero
 
-                let attrStr = NSMutableAttributedString(string: "Press ", attributes: normalAttrs)
-                attrStr.append(NSAttributedString(string: "⌘⇧U",        attributes: shortcutAttrs))
-                attrStr.append(NSAttributedString(string: " to unlock", attributes: normalAttrs))
+        let window = NSWindow(
+            contentRect: screenFrame,
+            styleMask:   [.borderless],
+            backing:     .buffered,
+            defer:       false)
 
-                let label = NSTextField(labelWithString: "")
-                label.attributedStringValue = attrStr
-                label.backgroundColor = .clear
-                label.isBezeled = false
-                label.isEditable = false
-                label.alignment = .center
-                label.sizeToFit()
+        window.isReleasedWhenClosed = false
+        window.level                = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+        window.isOpaque             = true
+        window.backgroundColor      = .black
+        window.hasShadow            = false
 
-                let padX: CGFloat = 16
-                let padY: CGFloat = 10
-                let pillW = label.frame.width + padX * 2
-                let pillH = label.frame.height + padY * 2
+        let metalView = MetalOverlayView(frame: screenFrame)
+        window.contentView = metalView
 
-                // Bottom-center, 40pt up from the bottom edge (Cocoa origin = bottom-left).
-                let hintX = (metalView.bounds.width - pillW) / 2
-                let hintY: CGFloat = 40
+        window.ignoresMouseEvents = true
+        window.makeKeyAndOrderFront(nil)
 
-                let hint = NSView(frame: CGRect(x: hintX, y: hintY, width: pillW, height: pillH))
-                hint.wantsLayer = true
-                hint.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
-                hint.layer?.cornerRadius = pillH / 2
-                hint.layer?.borderWidth = 1
-                hint.layer?.borderColor = NSColor.white.withAlphaComponent(0.15).cgColor
+        overlayWindow         = window
+        toggleMenuItem?.title = "Deactivate Ward"
+        toggleMenuItem?.keyEquivalent = ""
+        toggleMenuItem?.keyEquivalentModifierMask = []
+        unlockMenuItem?.isEnabled = true
 
-                // Center the label inside the hint pill.
-                label.frame = CGRect(x: padX, y: padY, width: label.frame.width, height: label.frame.height)
-                hint.addSubview(label)
+        // Cover every OTHER display with an opaque-black overlay so secondary
+        // screens don't keep showing the live desktop. The session-wide event tap
+        // already blocks keyboard input globally, but without these windows a
+        // second monitor would still display un-warded content. We register each
+        // window ID with the input lock so clicks on them are consumed, not
+        // whitelisted (they are Wardlume windows but must behave like the ward).
+        installSecondaryDisplayBlackouts(excluding: primaryScreen)
 
-                // Start fully transparent, fade in after a delay.
-                hint.alphaValue = 0.0
-                metalView.addSubview(hint)
-                unlockHintView = hint
+        // Phase 4b: layer base image above the Metal shader if one is resolved.
+        let activePack = reactionManager?.activePack ?? .silentProfessional
 
-                // Fade in after 4 seconds — preserves the initial aesthetic, then ensures
-                // anyone lingering/confused sees the unlock instructions.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { [weak self] in
-                    guard let hint = self?.unlockHintView else { return }
-                    NSAnimationContext.runAnimationGroup { ctx in
-                        ctx.duration = 1.0
-                        hint.animator().alphaValue = 0.75
-                    }
+        // Phase 5a: set shader mode based on pack's shaderStyle
+        metalView.params.minimalMode = (activePack.shaderStyle == .minimal) ? 1.0 : 0.0
+
+        if let baseURL = ReactionPack.resolvedBaseImageURL(for: activePack),
+           let image = NSImage(contentsOf: baseURL) {
+            let imageView = NSImageView(frame: metalView.bounds)
+            imageView.imageScaling = .scaleAxesIndependently
+            imageView.image = image
+            imageView.autoresizingMask = [.width, .height]
+            metalView.addSubview(imageView)
+            baseImageView = imageView
+            // Pause Metal rendering while occluded by opaque base image
+            metalView.isPaused = true
+            print("Wardlume [AppDelegate]: base image rendered, Metal paused")
+        } else {
+            baseImageView = nil
+            metalView.isPaused = false
+            print("Wardlume [AppDelegate]: no base image, Metal shader active")
+        }
+
+        // Phase 5a-p2: layer the pill indicator above Metal when the pack
+        // requests it and no base image is present (Phase 4b takes precedence).
+        if activePack.hasCornerIndicator && baseImageView == nil {
+            let pillW:  CGFloat = 80
+            let pillH:  CGFloat = 48
+
+            // Horizontally centered, above the unlock hint with a tight gap.
+            // Hint sits at y≈40 with height≈40pt, so its top edge ≈80pt.
+            // Eye pill bottom edge at y=93 → ~13pt gap between the two pills.
+            let pillX = (metalView.bounds.width - pillW) / 2
+            let pillY: CGFloat = 93
+
+            let pill = NSView(frame: CGRect(x: pillX, y: pillY,
+                                           width: pillW, height: pillH))
+            pill.wantsLayer = true
+            pill.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
+            pill.layer?.cornerRadius    = 14
+            pill.layer?.borderWidth     = 1
+            pill.layer?.borderColor     = NSColor.white.withAlphaComponent(0.15).cgColor
+            pill.alphaValue = 0.85
+
+            // eye.fill icon — 32pt light weight, white, centered in pill.
+            let config = NSImage.SymbolConfiguration(pointSize: 32, weight: .light)
+            if let symbol = NSImage(systemSymbolName: "eye.fill",
+                                    accessibilityDescription: "Ward active")?
+                               .withSymbolConfiguration(config) {
+                let iconSize: CGFloat = 36
+                let iv = NSImageView(frame: CGRect(
+                    x: (pillW - iconSize) / 2,
+                    y: (pillH - iconSize) / 2,
+                    width:  iconSize,
+                    height: iconSize))
+                iv.image            = symbol
+                iv.imageScaling     = .scaleProportionallyDown
+                iv.contentTintColor = .white
+                pill.addSubview(iv)
+            }
+
+            metalView.addSubview(pill)
+            indicatorView = pill
+
+            if let layer = pill.layer {
+                startBreathingAnimation(on: layer)
+            }
+        }
+
+        // Unlock hint — shown for ALL packs so users can always discover how to unlock.
+        // Fades in after a short delay to preserve the initial "magic" moment.
+        do {
+            // Attributed hint: "Press " + "⌘⇧U" (17pt semibold) + " to unlock"
+            // Mixing sizes inside one label so the shortcut symbols are clearly
+            // legible without making the surrounding words feel oversized.
+            let normalFont   = NSFont.monospacedSystemFont(ofSize: 13, weight: .medium)
+            let shortcutFont = NSFont.monospacedSystemFont(ofSize: 17, weight: .semibold)
+            let normalAttrs:   [NSAttributedString.Key: Any] = [.font: normalFont,   .foregroundColor: NSColor.white]
+            let shortcutAttrs: [NSAttributedString.Key: Any] = [.font: shortcutFont, .foregroundColor: NSColor.white]
+
+            let attrStr = NSMutableAttributedString(string: "Press ", attributes: normalAttrs)
+            attrStr.append(NSAttributedString(string: "⌘⇧U",        attributes: shortcutAttrs))
+            attrStr.append(NSAttributedString(string: " to unlock", attributes: normalAttrs))
+
+            let label = NSTextField(labelWithString: "")
+            label.attributedStringValue = attrStr
+            label.backgroundColor = .clear
+            label.isBezeled = false
+            label.isEditable = false
+            label.alignment = .center
+            label.sizeToFit()
+
+            let padX: CGFloat = 16
+            let padY: CGFloat = 10
+            let pillW = label.frame.width + padX * 2
+            let pillH = label.frame.height + padY * 2
+
+            // Bottom-center, 40pt up from the bottom edge (Cocoa origin = bottom-left).
+            let hintX = (metalView.bounds.width - pillW) / 2
+            let hintY: CGFloat = 40
+
+            let hint = NSView(frame: CGRect(x: hintX, y: hintY, width: pillW, height: pillH))
+            hint.wantsLayer = true
+            hint.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
+            hint.layer?.cornerRadius = pillH / 2
+            hint.layer?.borderWidth = 1
+            hint.layer?.borderColor = NSColor.white.withAlphaComponent(0.15).cgColor
+
+            // Center the label inside the hint pill.
+            label.frame = CGRect(x: padX, y: padY, width: label.frame.width, height: label.frame.height)
+            hint.addSubview(label)
+
+            // Start fully transparent, fade in after a delay.
+            hint.alphaValue = 0.0
+            metalView.addSubview(hint)
+            unlockHintView = hint
+
+            // Fade in after 4 seconds — preserves the initial aesthetic, then ensures
+            // anyone lingering/confused sees the unlock instructions.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { [weak self] in
+                guard let hint = self?.unlockHintView else { return }
+                NSAnimationContext.runAnimationGroup { ctx in
+                    ctx.duration = 1.0
+                    hint.animator().alphaValue = 0.75
                 }
             }
+        }
 
-            // Start desktop capture.
-            guard let device = metalView.device else { return }
-            let capture = DesktopCaptureManager(device: device, view: metalView)
-            captureManager = capture
-            capture.startCapture(excludingWindow: window)
+        // Start desktop capture. If there is no Metal device we cannot lock
+        // safely — abort the activation and tear the half-built ward down rather
+        // than leave a window with no working shader on screen.
+        guard let device = metalView.device else {
+            print("Wardlume [AppDelegate]: no Metal device — aborting activation.")
+            deactivateWard()
+            return
+        }
+        let capture = DesktopCaptureManager(device: device, view: metalView)
+        capture.captureDelegate = self
+        captureManager = capture
+        capture.startCapture(excludingWindow: window)
 
-            // Install the CGEventTap.
-            // wardWindow is passed explicitly so the callback can exclude the
-            // overlay surface from the Wardlume-window whitelist — events that
-            // land on the ward overlay itself must still be consumed.
-            guard let lock = inputLockManager else { return }
-            lock.install(view: metalView, wardWindow: window)
+        // Install the CGEventTap.
+        // wardWindow is passed explicitly so the callback can exclude the
+        // overlay surface from the Wardlume-window whitelist — events that
+        // land on the ward overlay itself must still be consumed.
+        guard let lock = inputLockManager else {
+            deactivateWard()
+            return
+        }
 
-            // Escape hatch: Cmd+Shift+W deactivates the ward from anywhere.
-            // The callback fires inside handleEvent() — before any consume
-            // decision — so it works even though the tap blocks all other keys.
-            lock.onEscapeHotkey = { [weak self] in self?.toggleWard() }
+        // CRITICAL: if the tap fails to install (e.g. a permission was revoked
+        // between the preflight check above and here), the overlay is already on
+        // screen but input is NOT locked. Tear the ward down and warn the user
+        // rather than present a locked-LOOKING but fully-interactive screen.
+        guard lock.install(view: metalView, wardWindow: window) else {
+            print("Wardlume [AppDelegate]: input lock failed to install — tearing down ward.")
+            deactivateWard()
+            let alert = NSAlert()
+            alert.messageText     = "Ward Could Not Lock Input"
+            alert.informativeText = """
+                Wardlume could not install the input lock, so the ward was not \
+                activated. This usually means Accessibility or Input Monitoring \
+                permission was turned off.
 
-            // Touch ID unlock: Cmd+Shift+U triggers biometric authentication.
-            // Handled inside the CGEventTap callback (not via NSEvent.addGlobalMonitorForEvents)
-            // because global NSEvent monitors are listen-only taps that never see events
-            // our head-insert read-write tap consumes. See InputLockManager.swift lines 84-90.
-            lock.onUnlockHotkey = { [weak self] in self?.unlockWithBiometrics() }
+                Re-enable Wardlume in System Settings → Privacy & Security, then \
+                try again.
+                """
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return
+        }
 
-            // Phase 2.5a: wire intrusion events to the reaction engine.
-            // ReactionManager.trigger() enforces its own cooldown — this fires
-            // on every consumed event regardless of the border-pulse debounce.
-            // Phase 5a-p2: flash both pills in one CATransaction so Core Animation
-            // schedules both layer.add calls on the same frame — perfectly synced glow.
-            // Both flash methods guard on their own view; safe to call unconditionally.
-            lock.onIntrusion = { [weak self] in
-                guard let self else { return }
-                self.reactionManager?.trigger()
-                CATransaction.begin()
-                self.flashIndicator()
-                self.flashUnlockHint()
-                CATransaction.commit()
-            }
+        // Touch ID unlock: Cmd+Shift+U triggers biometric authentication.
+        // Handled inside the CGEventTap callback (not via NSEvent.addGlobalMonitorForEvents)
+        // because global NSEvent monitors are listen-only taps that cannot observe
+        // events our head-insert read-write tap consumes.
+        lock.onUnlockHotkey = { [weak self] in self?.unlockWithBiometrics() }
+
+        // Phase 2.5a: wire intrusion events to the reaction engine.
+        // ReactionManager.trigger() enforces its own cooldown — this fires
+        // on every consumed event regardless of the border-pulse debounce.
+        // Phase 5a-p2: flash both pills in one CATransaction so Core Animation
+        // schedules both layer.add calls on the same frame — perfectly synced glow.
+        // Both flash methods guard on their own view; safe to call unconditionally.
+        lock.onIntrusion = { [weak self] in
+            guard let self else { return }
+            self.reactionManager?.trigger()
+            CATransaction.begin()
+            self.flashIndicator()
+            self.flashUnlockHint()
+            CATransaction.commit()
+        }
+
+        // Block system trackpad gestures (Mission Control, Spaces, Launchpad, etc.)
+        // for the duration of this ward session. Restored by deactivateWard() or
+        // automatically on next launch via GestureBlocker.recoverIfNeeded().
+        GestureBlocker.shared.activate()
+
+        // Start the keep-on-top watchdog.
+        startWardWatchdog()
+    }
+
+    // -------------------------------------------------------------------------
+    // MARK: — Secondary-display blackout
+    // -------------------------------------------------------------------------
+
+    /// Covers every screen except `primaryScreen` with an opaque-black borderless
+    /// window at CGShieldingWindowLevel, so secondary monitors don't keep displaying
+    /// the live desktop while the ward is up. Each window's ID is registered with
+    /// the input lock so clicks on it are consumed (not whitelisted).
+    private func installSecondaryDisplayBlackouts(excluding primaryScreen: NSScreen?) {
+        let shieldLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+        for screen in NSScreen.screens where screen != primaryScreen {
+            let w = NSWindow(contentRect: screen.frame,
+                             styleMask: [.borderless],
+                             backing: .buffered,
+                             defer: false)
+            w.isReleasedWhenClosed = false
+            w.level                = shieldLevel
+            w.isOpaque             = true
+            w.backgroundColor      = .black
+            w.hasShadow            = false
+            w.ignoresMouseEvents   = true
+            w.makeKeyAndOrderFront(nil)
+            inputLockManager?.registerSecondaryOverlay(CGWindowID(w.windowNumber))
+            secondaryOverlayWindows.append(w)
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // MARK: — Keep-on-top watchdog
+    // -------------------------------------------------------------------------
+
+    private func startWardWatchdog() {
+        stopWardWatchdog()
+        watchdogReraiseCount = 0
+        // 0.5 s cadence: fast enough to re-raise within the window the user would
+        // notice, slow enough to be negligible cost. Runs on the main run loop.
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            self?.watchdogTick()
+        }
+        timer.tolerance = 0.1
+        wardWatchdog = timer
+    }
+
+    private func stopWardWatchdog() {
+        wardWatchdog?.invalidate()
+        wardWatchdog = nil
+        watchdogReraiseCount = 0
+    }
+
+    /// One watchdog cycle. If the ward window has been displaced, re-raise it.
+    /// After `maxWatchdogReraises` consecutive failed recoveries, fall back to
+    /// the real macOS lock screen.
+    private func watchdogTick() {
+        guard let window = overlayWindow else { stopWardWatchdog(); return }
+
+        // Don't fight the menu: menuWillOpen intentionally lowers the level.
+        if menuIsOpen { return }
+
+        let shieldLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+        let displaced = window.isMiniaturized
+            || !window.isVisible
+            || window.level.rawValue < shieldLevel.rawValue
+
+        guard displaced else {
+            watchdogReraiseCount = 0
+            return
+        }
+
+        if watchdogReraiseCount >= maxWatchdogReraises {
+            print("Wardlume [AppDelegate]: ward kept being displaced after " +
+                  "\(maxWatchdogReraises) re-raise attempts — falling back to macOS lock screen.")
+            stopWardWatchdog()
+            deactivateWard()
+            Self.lockSystemScreen()
+            return
+        }
+
+        watchdogReraiseCount += 1
+        print("Wardlume [AppDelegate]: ward displaced (attempt \(watchdogReraiseCount)/\(maxWatchdogReraises)) — re-raising.")
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.level = shieldLevel
+        window.orderFrontRegardless()
+        for w in secondaryOverlayWindows {
+            w.level = shieldLevel
+            w.orderFrontRegardless()
+        }
+    }
+
+    /// Invokes the real macOS lock screen (login window) via the private
+    /// login.framework `SACLockScreenImmediate` symbol — the same call `pmset`
+    /// and several open-source utilities use. Falls back to a Keychain-lock
+    /// AppleScript-free no-op log if the symbol can't be resolved.
+    private static func lockSystemScreen() {
+        typealias LockFn = @convention(c) () -> Int32
+        let handle = dlopen("/System/Library/PrivateFrameworks/login.framework/Versions/Current/login", RTLD_NOW)
+        defer { if handle != nil { dlclose(handle) } }
+        if let sym = dlsym(handle, "SACLockScreenImmediate") {
+            let lock = unsafeBitCast(sym, to: LockFn.self)
+            _ = lock()
+            print("Wardlume [AppDelegate]: SACLockScreenImmediate invoked — macOS lock screen engaged.")
+        } else {
+            print("Wardlume [AppDelegate]: ⚠️ could not resolve SACLockScreenImmediate; system lock fallback unavailable.")
         }
     }
 
@@ -520,8 +734,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     /// the backgroundColor keyPath — the breathing opacity animation on the
     /// same layer continues undisturbed (different keyPaths don't conflict).
     ///
-    /// Guard-exits immediately when indicatorView is nil (grumpy / wizard active,
-    /// or ward deactivated) so the onIntrusion closure needs no pack check.
+    /// Guard-exits immediately when indicatorView is nil (a pack without a corner
+    /// indicator is active, or ward deactivated) so the onIntrusion closure needs
+    /// no pack check.
     private func flashIndicator() {
         guard let layer = indicatorView?.layer else { return }
 
@@ -610,10 +825,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         case #selector(toggleWard),
              #selector(unlockWithBiometrics),
              #selector(openPreferences),
-             #selector(quitApp),
-             #selector(debugSetPackGrumpy),
-             #selector(debugSetPackWizard),
-             #selector(debugSetPackSilent):
+             #selector(quitApp):
             return true
         #if DEBUG
         case #selector(testLock):
@@ -636,14 +848,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // Without this, the system's hit-testing routes clicks to the ward
         // window (highest level) instead of the menu, even though the menu
         // renders visually on top.
+        //
+        // menuIsOpen tells the keep-on-top watchdog to stand down so it doesn't
+        // immediately re-raise the ward to .screenSaver and steal the menu's clicks.
+        menuIsOpen = true
         overlayWindow?.level = .popUpMenu
+        for w in secondaryOverlayWindows { w.level = .popUpMenu }
     }
 
     func menuDidClose(_ menu: NSMenu) {
         // Restore the security level. Handle the case where the ward was
         // deactivated via Cmd+Shift+W while the menu was open (overlayWindow
         // would be nil) — in that case, there's nothing to restore.
+        menuIsOpen = false
         overlayWindow?.level = .screenSaver
+        for w in secondaryOverlayWindows { w.level = .screenSaver }
     }
 
     // -------------------------------------------------------------------------
@@ -651,9 +870,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     // -------------------------------------------------------------------------
 
     @objc func quitApp() {
-        inputLockManager?.uninstall()
-        reactionManager?.dismissReaction()  // clear any live overlay before exit
-        captureManager?.stopCapture()
+        // Full teardown (stops watchdog, uninstalls tap, closes all overlays).
+        deactivateWard()
         NSApp.terminate(nil)
     }
 
@@ -693,22 +911,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     }
 
 #endif
-
-    // ── Pack selector helpers ─────────────────────────────────────────────────
-    // Each method sets activePackID; the next trigger() picks up the change.
-    // Also accessible via Preferences.
-
-    @objc func debugSetPackGrumpy() {
-        reactionManager?.activePackID = ReactionPack.grumpyOldMan.id
-    }
-
-    @objc func debugSetPackWizard() {
-        reactionManager?.activePackID = ReactionPack.wizard.id
-    }
-
-    @objc func debugSetPackSilent() {
-        reactionManager?.activePackID = ReactionPack.silentProfessional.id
-    }
 }
 
 // -------------------------------------------------------------------------
@@ -720,5 +922,35 @@ extension AppDelegate: NSWindowDelegate {
         if notification.object as? NSWindow === preferencesWindow {
             preferencesWindow = nil
         }
+    }
+}
+
+// -------------------------------------------------------------------------
+// MARK: — DesktopCaptureManagerDelegate
+// -------------------------------------------------------------------------
+
+extension AppDelegate: DesktopCaptureManagerDelegate {
+    /// The capture stream stopped unexpectedly while the ward was up (most likely
+    /// Screen Recording permission was revoked). The input lock is independent of
+    /// capture, so the overlay would otherwise freeze on its last frame with input
+    /// still locked — a lockout behind a stale image. Tear the ward down so the
+    /// user regains control, and tell them why.
+    func desktopCaptureDidStop(_ manager: DesktopCaptureManager, error: Error?) {
+        guard overlayWindow != nil, manager === captureManager else { return }
+        print("Wardlume [AppDelegate]: capture stopped unexpectedly — tearing down ward.")
+        deactivateWard()
+        let alert = NSAlert()
+        alert.messageText     = "Ward Deactivated"
+        alert.informativeText = """
+            Wardlume's screen capture stopped, so the ward was deactivated to \
+            avoid leaving a frozen, locked-looking screen.
+
+            This usually means Screen Recording permission was turned off. \
+            Re-enable Wardlume in System Settings → Privacy & Security → Screen \
+            Recording, then activate the ward again.
+            """
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 }
