@@ -89,6 +89,8 @@ struct SettingsRootView: View {
         switch selection ?? .overview {
         case .overview:
             OverviewPane()
+        case .packAssets:
+            PackAssetsPane()
         default:
             VStack(alignment: .leading, spacing: 8) {
                 Text((selection ?? .overview).title)
@@ -246,6 +248,144 @@ private struct OverviewPane: View {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
             NSWorkspace.shared.open(url)
         }
+    }
+}
+
+// MARK: — Pack & assets pane
+
+private struct PackAssetsPane: View {
+    @EnvironmentObject var reactionManager: ReactionManager
+    @EnvironmentObject var userAssets: UserAssetManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Pack & assets")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("Choose the reaction pack and personalize the ward with your own visuals and sound.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            reactionCard
+            assetsCard
+        }
+    }
+
+    private var reactionCard: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack {
+                Text("Reaction pack").font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+                Spacer()
+                Picker("", selection: $reactionManager.activePackID) {
+                    ForEach(ReactionPack.all, id: \.id) { pack in
+                        Text(pack.name).tag(pack.id)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+
+            Divider().overlay(Theme.separator)
+
+            Toggle(isOn: $reactionManager.audioEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Play sound on intrusion").font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+                    Text("Plays the pack's audio if available. Some packs are silent.")
+                        .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                }
+            }
+            .toggleStyle(.switch)
+            .tint(Theme.accentTeal)
+
+            Divider().overlay(Theme.separator)
+
+            VStack(alignment: .leading, spacing: 7) {
+                Text("Cooldown").font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+                Picker("", selection: $reactionManager.cooldown) {
+                    Text("1s").tag(1.0)
+                    Text("3s").tag(3.0)
+                    Text("5s").tag(5.0)
+                    Text("10s").tag(10.0)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                Text("Minimum time between reactions.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+            }
+
+            Divider().overlay(Theme.separator)
+
+            Button { reactionManager.triggerForPreview() } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "play.fill").font(.system(size: 11))
+                    Text("Test reaction")
+                }
+                .font(.system(size: 12.5, weight: .medium))
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.keycapBackground))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.borderSubtle, lineWidth: 0.5))
+                .foregroundStyle(Theme.textPrimary)
+            }
+            .buttonStyle(.plain)
+        }
+        .wardCard()
+    }
+
+    private var assetsCard: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 9) {
+                Text("Custom assets")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("Optional")
+                    .font(.system(size: 10.5))
+                    .padding(.horizontal, 9).padding(.vertical, 2)
+                    .background(Capsule().fill(Color.white.opacity(0.08)))
+                    .foregroundStyle(Theme.textSecondary)
+                Spacer()
+            }
+            Text("Make the ward your own. Drag a file onto a slot or click Browse — leave blank to use the pack's default.")
+                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 2)
+
+            AssetRow(role: .cover,
+                     assetURL: userAssets.baseImageURL,
+                     set: { try userAssets.setBaseImage(from: $0) },
+                     clear: { userAssets.clearBaseImage() })
+
+            Divider().overlay(Theme.separator).padding(.vertical, 2)
+
+            HStack(spacing: 7) {
+                Image(systemName: "hand.tap.fill")
+                    .font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
+                Text("WHEN SOMEONE TOUCHES YOUR MAC")
+                    .font(.system(size: 11)).tracking(0.4)
+                    .foregroundStyle(Theme.textTertiary)
+                Spacer()
+            }
+
+            VStack(alignment: .leading, spacing: 0) {
+                AssetRow(role: .reaction,
+                         assetURL: userAssets.reactionImageURL,
+                         set: { try userAssets.setReactionImage(from: $0) },
+                         clear: { userAssets.clearReactionImage() })
+                Divider().overlay(Theme.separator.opacity(0.6))
+                AssetRow(role: .sound,
+                         assetURL: userAssets.audioURL,
+                         set: { try userAssets.setAudio(from: $0) },
+                         clear: { userAssets.clearAudio() })
+            }
+            .padding(.leading, 14)
+            .overlay(
+                Rectangle().fill(Theme.accentTeal.opacity(0.25)).frame(width: 2),
+                alignment: .leading)
+        }
+        .wardCard()
     }
 }
 
