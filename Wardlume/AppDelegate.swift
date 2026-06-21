@@ -88,6 +88,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     /// re-raising / re-leveling the window during that window.
     private var menuIsOpen = false
 
+    /// True while a Touch ID / password prompt is on screen. The ward is lowered
+    /// beneath the SecurityAgent prompt during this window (it sits at
+    /// CGShieldingWindowLevel, which would otherwise cover the prompt); the
+    /// keep-on-top watchdog must stand down so it doesn't re-raise over the prompt.
+    private var isAuthenticating = false
+
+    /// systemUptime when the ward last activated. Reactions are suppressed for
+    /// `activationGraceSeconds` afterward so the activating input (the ⌘⇧L press,
+    /// a mouse-up, modifier release) isn't itself treated as an intrusion the
+    /// instant the ward comes up.
+    private var wardActivatedAt: TimeInterval = 0
+    private let activationGraceSeconds: TimeInterval = 5.0
+
     // -------------------------------------------------------------------------
     // MARK: — Application launch
     // -------------------------------------------------------------------------
@@ -418,8 +431,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // Phase 4b: layer base image above the Metal shader if one is resolved.
         let activePack = reactionManager?.activePack ?? .silentProfessional
 
-        // Phase 5a: set shader mode based on pack's shaderStyle
-        metalView.params.minimalMode = (activePack.shaderStyle == .minimal) ? 1.0 : 0.0
+        // Shader mode: user-level override from the Behavior pane (default minimal).
+        metalView.params.minimalMode = (wardPrefs.shaderStyleOverride == .minimal) ? 1.0 : 0.0
 
         if let baseURL = ReactionPack.resolvedBaseImageURL(for: activePack),
            let image = NSImage(contentsOf: baseURL) {
@@ -602,6 +615,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // Both flash methods guard on their own view; safe to call unconditionally.
         lock.onIntrusion = { [weak self] in
             guard let self else { return }
+            // Don't fire reactions while the Touch ID / password prompt is up — the
+            // user is authenticating, not intruding, and a reaction overlay would
+            // pop over (or beside) the prompt.
+            guard !self.isAuthenticating else { return }
+            // Grace period right after activation: the user's own activation input
+            // (the ⌘⇧L press, mouse-up, modifier release) isn't an intrusion.
+            guard ProcessInfo.processInfo.systemUptime - self.wardActivatedAt > self.activationGraceSeconds else { return }
             self.reactionManager?.trigger()
             CATransaction.begin()
             self.flashIndicator()
@@ -610,15 +630,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         }
 
         // Block system trackpad gestures (Mission Control, Spaces, Launchpad, etc.)
-        // for the duration of this ward session. Restored by deactivateWard() or
-        // automatically on next launch via GestureBlocker.recoverIfNeeded().
-        GestureBlocker.shared.activate()
+        // for the duration of this ward session — only if the user hasn't turned it
+        // off in Behavior. Restored by deactivateWard() or, after a crash, by
+        // GestureBlocker.recoverIfNeeded() at next launch (which is NOT gated).
+        if wardPrefs.blockGestures {
+            GestureBlocker.shared.activate()
+        }
 
         // Start the keep-on-top watchdog.
         startWardWatchdog()
 
         // Mirror ward-active state for the SwiftUI settings panes.
         wardState.isActive = true
+
+        // Start the reaction grace period (see wardActivatedAt): ignore intrusions
+        // briefly so the activation input isn't treated as one.
+        wardActivatedAt = ProcessInfo.processInfo.systemUptime
     }
 
     // -------------------------------------------------------------------------
@@ -677,7 +704,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         guard let window = overlayWindow else { stopWardWatchdog(); return }
 
         // Don't fight the menu: menuWillOpen intentionally lowers the level.
-        if menuIsOpen { return }
+        if menuIsOpen || isAuthenticating { return }
 
         let shieldLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
         let displaced = window.isMiniaturized
@@ -731,11 +758,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     // -------------------------------------------------------------------------
 
     @objc func unlockWithBiometrics() {
+        // The ward sits at CGShieldingWindowLevel, which would cover the system
+        // Touch ID / password prompt. Lower the ward (and the secondary blackouts)
+        // beneath the prompt for the duration of authentication, and pause the
+        // keep-on-top watchdog (isAuthenticating) so it doesn't re-raise the ward
+        // over the prompt. Input stays locked the whole time (the tap is unaffected).
+        if overlayWindow != nil {
+            isAuthenticating = true
+            reactionManager?.dismissReaction()   // clear any in-flight reaction so it can't overlap the prompt
+            overlayWindow?.level = .screenSaver
+            for w in secondaryOverlayWindows { w.level = .screenSaver }
+        }
+
         BiometricUnlockManager.shared.evaluateUnlock(
             reason: "Authenticate to deactivate the Wardlume ward."
         ) { [weak self] success, _ in
-            guard let self, success, self.overlayWindow != nil else { return }
-            self.toggleWard()
+            guard let self else { return }
+            self.isAuthenticating = false
+            if success, self.overlayWindow != nil {
+                self.toggleWard()                       // authenticated — tear the ward down
+            } else if self.overlayWindow != nil {
+                // Cancelled / failed — restore the ward to shielding level.
+                let shield = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+                self.overlayWindow?.level = shield
+                for w in self.secondaryOverlayWindows { w.level = shield }
+            }
         }
     }
 
@@ -925,8 +972,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // deactivated via ⌘⇧U (Touch ID) or the ⌘⇧L toggle while the menu was
         // open (overlayWindow would be nil) — in that case, there's nothing to restore.
         menuIsOpen = false
-        overlayWindow?.level = .screenSaver
-        for w in secondaryOverlayWindows { w.level = .screenSaver }
+        let shield = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+        overlayWindow?.level = shield
+        for w in secondaryOverlayWindows { w.level = shield }
     }
 
     // -------------------------------------------------------------------------

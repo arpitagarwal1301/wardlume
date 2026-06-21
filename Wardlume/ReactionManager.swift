@@ -36,6 +36,7 @@
 //  ────────────────────────────────────────────────────────────────────────────
 
 import AppKit
+import CoreGraphics
 import AVFoundation
 import Combine
 
@@ -296,7 +297,9 @@ final class ReactionManager: ObservableObject {
             defer:       false
         )
         window.isReleasedWhenClosed = false
-        window.level                = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
+        // Above the ward overlay (which sits at CGShieldingWindowLevel) so the
+        // reaction image is visible, not drawn behind the ward.
+        window.level                = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()) + 1)
         
         // Dynamically set opacity based on pack style to let the Metal shader show through in minimal mode
         if pack.style == .minimal {
