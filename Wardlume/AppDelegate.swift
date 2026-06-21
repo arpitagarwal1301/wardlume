@@ -28,6 +28,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     /// activate/deactivate cycles (never reset to nil on ward toggle).
     var reactionManager: ReactionManager?
 
+    /// Settings revamp: AppKit→SwiftUI bridge + persisted prefs + configurable
+    /// hotkeys, all injected into the settings window as environment objects.
+    /// `wardState` mirrors the ward-active state (and live permission flags) for
+    /// SwiftUI panes; AppDelegate stays the authoritative ward-lifecycle owner.
+    /// `wardPrefs` and `hotkeyManager` follow the ReactionManager persistence pattern.
+    var wardState: WardState!
+    let wardPrefs = WardPrefs()
+    let hotkeyManager = HotkeyManager()
+
     /// Phase 2.5c: owns the preferences window lifecycle. Created on first
     /// openPreferences() call and reused for subsequent opens.
     var preferencesWindow: NSWindow?
@@ -206,6 +215,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // whitelisted and leaking input to background apps).
         reactionManager?.inputLockManager = inputLockManager
 
+        // Settings revamp: create the SwiftUI bridge state and forward toggle()
+        // calls from the settings panes to the authoritative ward lifecycle here.
+        wardState = WardState()
+        wardState.onToggle = { [weak self] in self?.toggleWard() }
+        wardState.recheckPermissions()
+
         // Crash recovery: if a previous ward session crashed while gestures were
         // disabled, GestureBlocker restores them here before anything else runs.
         GestureBlocker.shared.recoverIfNeeded()
@@ -310,6 +325,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         toggleMenuItem?.keyEquivalent = "l"
         toggleMenuItem?.keyEquivalentModifierMask = [.command, .shift]
         unlockMenuItem?.isEnabled = false
+
+        // Mirror ward-inactive state for the SwiftUI settings panes. Covers every
+        // teardown path (hotkey, sleep, watchdog, unlock, quit) since they all
+        // route through deactivateWard().
+        wardState?.isActive = false
     }
 
     /// Brings the ward up: permission gate → window(s) → capture → input lock.
@@ -591,6 +611,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
         // Start the keep-on-top watchdog.
         startWardWatchdog()
+
+        // Mirror ward-active state for the SwiftUI settings panes.
+        wardState.isActive = true
     }
 
     // -------------------------------------------------------------------------
@@ -781,37 +804,45 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     // -------------------------------------------------------------------------
 
     @objc func openPreferences() {
+        // Refresh live permission flags whenever the window is summoned.
+        wardState?.recheckPermissions()
+
         if let window = preferencesWindow {
-            // Window exists: bring to front
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
-        } else {
-            // Create new window
-            guard let reactionManager = reactionManager else { return }
-            let contentView = PreferencesView(reactionManager: reactionManager)
-            let hostingController = NSHostingController(rootView: contentView)
-            
-            // Let the hosting controller communicate SwiftUI's intrinsic size to the window
-            hostingController.sizingOptions = [.intrinsicContentSize]
-            
-            // Use contentViewController initializer so window sizes itself to content
-            let window = NSWindow(contentViewController: hostingController)
-            window.title = "Wardlume Preferences"
-            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            
-            // Set initial content size hint (larger than minimum for breathing room)
-            window.setContentSize(NSSize(width: 520, height: 450))
-            
-            // Minimum window frame size (includes ~28pt title bar, ensures 480×400 content area)
-            window.minSize = NSSize(width: 480, height: 428)
-            
-            window.center()
-            window.isReleasedWhenClosed = false
-            window.delegate = self
-            
-            preferencesWindow = window
-            window.makeKeyAndOrderFront(nil)
+            return
         }
+
+        guard let reactionManager = reactionManager else { return }
+
+        // Host the revamped dark sidebar settings UI. Every observable the panes
+        // need is injected as an environment object so SwiftUI never reaches into
+        // AppKit directly.
+        let root = SettingsRootView()
+            .environmentObject(wardState)
+            .environmentObject(wardPrefs)
+            .environmentObject(hotkeyManager)
+            .environmentObject(reactionManager)
+            .environmentObject(UserAssetManager.shared)
+
+        let hostingController = NSHostingController(rootView: root)
+
+        // NavigationSplitView has NO intrinsic content size — using
+        // .intrinsicContentSize sizing would open the window zero-sized. Set
+        // explicit content + minimum sizes instead.
+        let window = NSWindow(contentViewController: hostingController)
+        window.title       = "Wardlume Settings"
+        window.styleMask   = [.titled, .closable, .miniaturizable, .resizable]
+        window.appearance  = NSAppearance(named: .darkAqua)   // pin dark; never leaks to the ward/menu
+        window.setContentSize(NSSize(width: 820, height: 640))
+        window.minSize     = NSSize(width: 760, height: 560)
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.delegate    = self
+
+        preferencesWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     // -------------------------------------------------------------------------
@@ -917,6 +948,16 @@ extension AppDelegate: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         if notification.object as? NSWindow === preferencesWindow {
             preferencesWindow = nil
+        }
+    }
+
+    /// Pull-based permission refresh: when the user returns to the settings window
+    /// (e.g. after granting a permission in System Settings), recheck so the
+    /// Overview checklist reflects reality. (Screen Recording may still need a
+    /// relaunch — its preflight value is process-cached.)
+    func windowDidBecomeKey(_ notification: Notification) {
+        if notification.object as? NSWindow === preferencesWindow {
+            wardState?.recheckPermissions()
         }
     }
 }
