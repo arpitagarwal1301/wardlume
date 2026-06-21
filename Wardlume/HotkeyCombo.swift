@@ -28,8 +28,11 @@ struct HotkeyCombo: Equatable, Codable, Sendable {
     var modifiers: HotkeyModifiers
 
     // MARK: — Defaults (preserve today's behavior)
-    static let activateDefault = HotkeyCombo(keyCode: UInt16(kVK_ANSI_L), modifiers: [.command, .shift])
-    static let unlockDefault   = HotkeyCombo(keyCode: UInt16(kVK_ANSI_U), modifiers: [.command, .shift])
+    static let activateDefault      = HotkeyCombo(keyCode: UInt16(kVK_ANSI_L), modifiers: [.command, .shift])
+    static let unlockDefault        = HotkeyCombo(keyCode: UInt16(kVK_ANSI_U), modifiers: [.command, .shift])
+    /// Default emergency-exit combo — ⌘⇧W (the legacy escape combo); the user can
+    /// change it. Only active when the user enables emergency exit.
+    static let emergencyExitDefault = HotkeyCombo(keyCode: UInt16(kVK_ANSI_W), modifiers: [.command, .shift])
 
     /// The exact 4 modifier bits compared on both the recorder and tap sides.
     /// Defined nonisolated so the nonisolated CGEventTap callback can use it.

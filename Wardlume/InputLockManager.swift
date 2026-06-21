@@ -57,6 +57,13 @@ final class InputLockManager: NSObject {
     nonisolated(unsafe) private var unlockKeyCode: Int64 = 32
     nonisolated(unsafe) private var unlockFlags: CGEventFlags = [.maskCommand, .maskShift]
 
+    // Optional emergency-exit ("panic") combo, default OFF. When enabled, matching
+    // it in the callback drops the ward with NO authentication. Cached like the
+    // unlock combo; set on the main thread, read on the run-loop thread.
+    nonisolated(unsafe) private var panicEnabled: Bool = false
+    nonisolated(unsafe) private var panicKeyCode: Int64 = 0
+    nonisolated(unsafe) private var panicFlags: CGEventFlags = []
+
     // Set by AppDelegate via install(view:wardWindow:); accessed in the callback.
     nonisolated(unsafe) weak var metalView: MetalOverlayView?
 
@@ -119,6 +126,12 @@ final class InputLockManager: NSObject {
     ///   • onIntrusion   → punitive reaction overlay for the *intruder* (max 1 per cooldown).
     /// Conflating the two clocks would make changing one silently break the other.
     nonisolated(unsafe) var onIntrusion: (() -> Void)?
+
+    /// Called (on the main thread) when the emergency-exit combo is matched while
+    /// enabled. Set by AppDelegate to tear the ward down WITHOUT authentication.
+    /// Independent of the intrusion/grace/auth gating — the panic key must always
+    /// work the instant it's pressed.
+    nonisolated(unsafe) var onPanic: (() -> Void)?
 
     // -------------------------------------------------------------------------
     // MARK: — Permission helpers
@@ -272,6 +285,14 @@ final class InputLockManager: NSObject {
         unlockFlags   = combo.cgEventFlags
     }
 
+    /// Updates the emergency-exit ("panic") combo and whether it's enabled.
+    /// Main-thread only — the callback reads these on the same run loop.
+    func setEmergencyExit(enabled: Bool, combo: HotkeyCombo) {
+        panicEnabled = enabled
+        panicKeyCode = Int64(combo.keyCode)
+        panicFlags   = combo.cgEventFlags
+    }
+
     /// Registers a secondary-display blackout window so the callback consumes
     /// clicks landing on it (treats it like the ward overlay) instead of
     /// whitelisting it as a generic Wardlume window. Call once per secondary
@@ -347,6 +368,14 @@ final class InputLockManager: NSObject {
                 // Dispatch async to avoid blocking the tap callback with heavy work
                 // (Touch ID prompt, biometric evaluation).
                 if let cb = onUnlockHotkey {
+                    DispatchQueue.main.async { cb() }
+                }
+                return nil
+            }
+            // Emergency-exit ("panic") combo: drops the ward with no authentication
+            // when enabled. Independent of the grace/auth gating so it always works.
+            if panicEnabled && keycode == panicKeyCode && masked == panicFlags {
+                if let cb = onPanic {
                     DispatchQueue.main.async { cb() }
                 }
                 return nil

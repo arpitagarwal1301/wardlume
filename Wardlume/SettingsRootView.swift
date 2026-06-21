@@ -401,10 +401,6 @@ private struct BehaviorPane: View {
     @EnvironmentObject var hotkeyManager: HotkeyManager
     @State private var showResetConfirm = false
 
-    private var reduceMotion: Bool {
-        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 3) {
@@ -417,41 +413,9 @@ private struct BehaviorPane: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            appearanceCard
             gesturesCard
             resetCard
         }
-    }
-
-    private var appearanceCard: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text("Ward appearance").font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
-                Picker("", selection: $wardPrefs.shaderStyleOverride) {
-                    Text("Minimal").tag(ShaderStyle.minimal)
-                    Text("Full").tag(ShaderStyle.full)
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                Text("Minimal is a sober glass shield. Full adds the animated aurora, drifting sigils, and motes.")
-                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Divider().overlay(Theme.separator)
-
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Reduce motion").font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
-                    Text("Follows your macOS accessibility setting.").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-                }
-                Spacer()
-                Text(reduceMotion ? "On" : "Off")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Theme.textSecondary)
-            }
-        }
-        .wardCard()
     }
 
     private var gesturesCard: some View {
@@ -548,6 +512,39 @@ private struct ShortcutsPane: View {
                     combo: $hotkeyManager.unlock,
                     error: hotkeyManager.unlockError,
                     onReset: { hotkeyManager.unlock = .unlockDefault })
+            }
+            .wardCard()
+
+            VStack(alignment: .leading, spacing: 11) {
+                Toggle(isOn: $hotkeyManager.emergencyExitEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Emergency exit (no Touch ID)")
+                            .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+                        Text("A shortcut that instantly drops the ward without authentication.")
+                            .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(Theme.accentTeal)
+
+                if hotkeyManager.emergencyExitEnabled {
+                    Divider().overlay(Theme.separator)
+                    HotkeyRecorderField(
+                        title: "Emergency-exit shortcut",
+                        subtitle: "Drops the ward immediately",
+                        combo: $hotkeyManager.emergencyExit,
+                        error: hotkeyManager.emergencyError,
+                        onReset: { hotkeyManager.emergencyExit = .emergencyExitDefault })
+                    HStack(alignment: .top, spacing: 7) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 12)).foregroundStyle(Theme.warning)
+                        Text("Anyone at the keyboard can dismiss the ward with this — leave it off unless you want a guaranteed way out of a lockout.")
+                            .font(.system(size: 11.5)).foregroundStyle(Theme.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                }
             }
             .wardCard()
 

@@ -215,6 +215,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             self?.inputLockManager?.setUnlockCombo(combo)
             self?.refreshUnlockMenuTitle(combo)
         }
+        // Push emergency-exit changes (enabled + combo) into the running tap.
+        hotkeyManager.onEmergencyChanged = { [weak self] enabled, combo in
+            self?.inputLockManager?.setEmergencyExit(enabled: enabled, combo: combo)
+        }
 
         // Phase 4a: initialize user asset slots from disk.
         // Accessing .shared triggers init() which calls scan().
@@ -431,8 +435,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // Phase 4b: layer base image above the Metal shader if one is resolved.
         let activePack = reactionManager?.activePack ?? .silentProfessional
 
-        // Shader mode: user-level override from the Behavior pane (default minimal).
-        metalView.params.minimalMode = (wardPrefs.shaderStyleOverride == .minimal) ? 1.0 : 0.0
+        // The ward shader is always the sober minimal glass. Character packs show
+        // their bundled base image over it anyway, so the shader is only visible
+        // for the default Silent Professional ward.
+        metalView.params.minimalMode = 1.0
 
         if let baseURL = ReactionPack.resolvedBaseImageURL(for: activePack),
            let image = NSImage(contentsOf: baseURL) {
@@ -606,6 +612,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // because global NSEvent monitors are listen-only taps that cannot observe
         // events our head-insert read-write tap consumes.
         lock.onUnlockHotkey = { [weak self] in self?.unlockWithBiometrics() }
+
+        // Emergency exit ("panic"): tear the ward down immediately, no auth. Only
+        // fires when the user has enabled it in Shortcuts. Push the current state
+        // into the freshly-installed tap.
+        lock.onPanic = { [weak self] in self?.deactivateWard() }
+        lock.setEmergencyExit(enabled: hotkeyManager.emergencyExitEnabled,
+                              combo: hotkeyManager.emergencyExit)
 
         // Phase 2.5a: wire intrusion events to the reaction engine.
         // ReactionManager.trigger() enforces its own cooldown — this fires
