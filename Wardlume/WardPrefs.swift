@@ -22,18 +22,34 @@ final class WardPrefs: ObservableObject {
         didSet { UserDefaults.standard.set(blockGestures, forKey: Self.kBlockGestures) }
     }
 
+    /// User-level shader look for the ward background. Default `.minimal` (the sober
+    /// glass shield that matches Silent Professional). `.full` enables the animated
+    /// aurora / sigils / motes. Read at activation in AppDelegate.
+    @Published var shaderStyleOverride: ShaderStyle {
+        didSet { UserDefaults.standard.set(shaderStyleOverride.rawValue, forKey: Self.kShaderStyle) }
+    }
+
     private static let kBlockGestures = "wardlume.blockGestures"
+    private static let kShaderStyle   = "wardlume.shaderStyleOverride"
 
     init() {
-        // object(forKey:) distinguishes "absent" (use default true) from a stored false.
+        // object(forKey:) distinguishes "absent" (use default) from a stored value.
         if UserDefaults.standard.object(forKey: Self.kBlockGestures) != nil {
             blockGestures = UserDefaults.standard.bool(forKey: Self.kBlockGestures)
         } else {
             blockGestures = true
         }
+
+        if let raw = UserDefaults.standard.string(forKey: Self.kShaderStyle),
+           let style = ShaderStyle(rawValue: raw) {
+            shaderStyleOverride = style
+        } else {
+            shaderStyleOverride = .minimal
+        }
     }
 
     func resetToDefaults() {
         blockGestures = true
+        shaderStyleOverride = .minimal
     }
 }

@@ -93,6 +93,8 @@ struct SettingsRootView: View {
             PackAssetsPane()
         case .shortcuts:
             ShortcutsPane()
+        case .behavior:
+            BehaviorPane()
         default:
             VStack(alignment: .leading, spacing: 8) {
                 Text((selection ?? .overview).title)
@@ -388,6 +390,130 @@ private struct PackAssetsPane: View {
                 alignment: .leading)
         }
         .wardCard()
+    }
+}
+
+// MARK: — Behavior pane
+
+private struct BehaviorPane: View {
+    @EnvironmentObject var wardPrefs: WardPrefs
+    @EnvironmentObject var reactionManager: ReactionManager
+    @EnvironmentObject var hotkeyManager: HotkeyManager
+    @State private var showResetConfirm = false
+
+    private var reduceMotion: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Behavior")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("Fine-tune how the ward looks and behaves.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            appearanceCard
+            gesturesCard
+            resetCard
+        }
+    }
+
+    private var appearanceCard: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            VStack(alignment: .leading, spacing: 7) {
+                Text("Ward appearance").font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+                Picker("", selection: $wardPrefs.shaderStyleOverride) {
+                    Text("Minimal").tag(ShaderStyle.minimal)
+                    Text("Full").tag(ShaderStyle.full)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                Text("Minimal is a sober glass shield. Full adds the animated aurora, drifting sigils, and motes.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider().overlay(Theme.separator)
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Reduce motion").font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+                    Text("Follows your macOS accessibility setting.").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                }
+                Spacer()
+                Text(reduceMotion ? "On" : "Off")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+        }
+        .wardCard()
+    }
+
+    private var gesturesCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: $wardPrefs.blockGestures) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Block system gestures").font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+                    Text("Suppresses Mission Control, Spaces, and Launchpad while the ward is active.")
+                        .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(.switch)
+            .tint(Theme.accentTeal)
+
+            if !wardPrefs.blockGestures {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11)).foregroundStyle(Theme.warning)
+                    Text("With this off, trackpad gestures can switch Spaces over the ward.")
+                        .font(.system(size: 11.5)).foregroundStyle(Theme.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .wardCard()
+    }
+
+    private var resetCard: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Reset all settings").font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+                Text("Restores pack, sound, cooldown, shortcuts, and behavior to defaults. Your custom asset files are kept.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button(role: .destructive) { showResetConfirm = true } label: {
+                Text("Reset…")
+                    .font(.system(size: 12, weight: .medium))
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.danger.opacity(0.16)))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.danger.opacity(0.45), lineWidth: 0.5))
+                    .foregroundStyle(Theme.danger)
+            }
+            .buttonStyle(.plain)
+            .confirmationDialog("Reset all Wardlume settings to defaults?",
+                                isPresented: $showResetConfirm, titleVisibility: .visible) {
+                Button("Reset settings", role: .destructive) { resetAll() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Custom asset files (cover, reaction, sound) are not removed.")
+            }
+        }
+        .wardCard()
+    }
+
+    private func resetAll() {
+        reactionManager.activePackID = ReactionPack.silentProfessional.id
+        reactionManager.audioEnabled = false
+        reactionManager.cooldown = 5.0
+        hotkeyManager.resetToDefaults()
+        wardPrefs.resetToDefaults()
     }
 }
 
