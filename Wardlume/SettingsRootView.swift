@@ -15,8 +15,7 @@ import AppKit
 // MARK: — Navigation model
 
 enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
-    case overview, packAssets, shortcuts, behavior   // primary nav
-    case about, privacy, terms                        // reached via sidebar footer rows
+    case overview, packAssets, shortcuts, behavior
     var id: String { rawValue }
 
     var title: String {
@@ -25,9 +24,6 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .packAssets: "Pack & assets"
         case .shortcuts:  "Shortcuts"
         case .behavior:   "Behavior"
-        case .about:      "About"
-        case .privacy:    "Privacy"
-        case .terms:      "Terms"
         }
     }
 
@@ -37,9 +33,6 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .packAssets: "photo"
         case .shortcuts:  "keyboard"
         case .behavior:   "slider.horizontal.3"
-        case .about:      "info.circle"
-        case .privacy:    "lock.shield"
-        case .terms:      "doc.text"
         }
     }
 }
@@ -95,15 +88,6 @@ struct SettingsRootView: View {
             ShortcutsPane()
         case .behavior:
             BehaviorPane()
-        default:
-            VStack(alignment: .leading, spacing: 8) {
-                Text((selection ?? .overview).title)
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(Theme.textPrimary)
-                Text("This section is coming together — its controls land in an upcoming step.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.textSecondary)
-            }
         }
     }
 }

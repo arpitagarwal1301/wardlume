@@ -44,12 +44,10 @@ struct SettingsSidebar: View {
             Divider().overlay(Theme.separator)
 
             HStack(spacing: 9) {
-                ZStack {
-                    Circle().fill(Theme.accentTealDim).frame(width: 30, height: 30)
-                    Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Theme.textPrimary)
-                }
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 34, height: 34)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Wardlume \(appVersion)")
                         .font(.system(size: 13, weight: .medium))
@@ -66,9 +64,13 @@ struct SettingsSidebar: View {
             footerRow("Check updates", "arrow.triangle.2.circlepath") {
                 open("https://github.com/arpitagarwal1301/wardlume/releases/latest")
             }
-            footerRow("About", "info.circle") { selection = .about }
-            footerRow("Privacy", "lock.shield") { selection = .privacy }
-            footerRow("Terms", "doc.text") { selection = .terms }
+            footerRow("Privacy", "lock.shield") {
+                open("https://github.com/arpitagarwal1301/wardlume/blob/main/PRIVACY.md")
+            }
+            footerRow("Terms", "doc.text") {
+                open("https://github.com/arpitagarwal1301/wardlume/blob/main/TERMS.md")
+            }
+            footerRow("About", "info.circle") { showAbout() }
 
             Button {
                 open("https://github.com/sponsors/arpitagarwal1301")
@@ -108,5 +110,11 @@ struct SettingsSidebar: View {
 
     private func open(_ urlString: String) {
         if let url = URL(string: urlString) { NSWorkspace.shared.open(url) }
+    }
+
+    /// Standard macOS About panel (app icon, name, version, copyright from Info.plist).
+    private func showAbout() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [:])
     }
 }
