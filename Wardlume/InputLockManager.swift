@@ -50,6 +50,13 @@ final class InputLockManager: NSObject {
     // Cached at install() time on the main thread; read in the callback.
     nonisolated(unsafe) private var menuBarThreshold:  CGFloat = 50
 
+    // Configurable unlock combo, cached for the nonisolated callback. Set on the
+    // main thread at install() and via setUnlockCombo() (mid-ward changes); read in
+    // the callback on the same run loop, so the thread invariant keeps it safe.
+    // Defaults preserve ⌘⇧U (keycode 32) until install() supplies the real combo.
+    nonisolated(unsafe) private var unlockKeyCode: Int64 = 32
+    nonisolated(unsafe) private var unlockFlags: CGEventFlags = [.maskCommand, .maskShift]
+
     // Set by AppDelegate via install(view:wardWindow:); accessed in the callback.
     nonisolated(unsafe) weak var metalView: MetalOverlayView?
 
@@ -161,7 +168,7 @@ final class InputLockManager: NSObject {
     ///   down the ward overlay — otherwise a "locked-looking" screen would be left
     ///   on top of a fully interactive system.
     @discardableResult
-    func install(view: MetalOverlayView, wardWindow: NSWindow) -> Bool {
+    func install(view: MetalOverlayView, wardWindow: NSWindow, unlock: HotkeyCombo) -> Bool {
         guard tapRef == nil else { return true }
         metalView = view
 
@@ -169,6 +176,8 @@ final class InputLockManager: NSObject {
         wardWindowID       = CGWindowID(wardWindow.windowNumber)
         wardlumePID        = pid_t(ProcessInfo.processInfo.processIdentifier)
         cachedScreenHeight = NSScreen.main?.frame.height ?? 800
+        unlockKeyCode      = Int64(unlock.keyCode)
+        unlockFlags        = unlock.cgEventFlags
 
         // Cache the menu-bar strip height while we're on the main thread.
         // Quartz coordinates: y=0 at the top of the primary display, increasing
@@ -255,6 +264,14 @@ final class InputLockManager: NSObject {
     /// screen) but whose tap was torn down by the OS (e.g. on system sleep).
     var isLocked: Bool { tapRef != nil }
 
+    /// Updates the unlock combo on a running tap (e.g. the user changed it in the
+    /// Shortcuts pane while warded). Main-thread only — the callback reads these
+    /// fields on the same run loop, so no locking is needed.
+    func setUnlockCombo(_ combo: HotkeyCombo) {
+        unlockKeyCode = Int64(combo.keyCode)
+        unlockFlags   = combo.cgEventFlags
+    }
+
     /// Registers a secondary-display blackout window so the callback consumes
     /// clicks landing on it (treats it like the ward overlay) instead of
     /// whitelisting it as a generic Wardlume window. Call once per secondary
@@ -318,14 +335,15 @@ final class InputLockManager: NSObject {
         // NSEvent.addGlobalMonitorForEvents — global NSEvent monitors are listen-only
         // taps and cannot observe events our head-insert read-write tap consumes.
         //
-        // Keycode 32 = the 'U' physical key on standard keyboard layouts.
-        // Cmd+Shift+W (keycode 13) is intentionally NOT intercepted here — it is
-        // consumed silently like any other keystroke while the ward is active.
+        // The unlock combo is user-configurable (default ⌘⇧U); cached in
+        // unlockKeyCode / unlockFlags at install() time. Cmd+Shift+W is NOT special
+        // — it is consumed silently like any other keystroke while the ward is active.
         if type == .keyDown {
             let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-            let flags   = event.flags
-            if keycode == 32 &&
-               flags.contains(.maskCommand) && flags.contains(.maskShift) {
+            // Mask the live flags to the four real modifiers and require an EXACT
+            // match, so e.g. ⌘⇧U does not also fire on ⌘⇧⌃U.
+            let masked = event.flags.intersection(HotkeyCombo.realModifierMask)
+            if keycode == unlockKeyCode && masked == unlockFlags {
                 // Dispatch async to avoid blocking the tap callback with heavy work
                 // (Touch ID prompt, biometric evaluation).
                 if let cb = onUnlockHotkey {

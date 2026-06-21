@@ -91,6 +91,8 @@ struct SettingsRootView: View {
             OverviewPane()
         case .packAssets:
             PackAssetsPane()
+        case .shortcuts:
+            ShortcutsPane()
         default:
             VStack(alignment: .leading, spacing: 8) {
                 Text((selection ?? .overview).title)
@@ -386,6 +388,53 @@ private struct PackAssetsPane: View {
                 alignment: .leading)
         }
         .wardCard()
+    }
+}
+
+// MARK: — Shortcuts pane
+
+private struct ShortcutsPane: View {
+    @EnvironmentObject var hotkeyManager: HotkeyManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Shortcuts")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("Remap how you control the ward. Click a field, then press your keys.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 0) {
+                HotkeyRecorderField(
+                    title: "Activate / deactivate ward",
+                    subtitle: "Works anywhere, even when another app is focused",
+                    combo: $hotkeyManager.activate,
+                    error: hotkeyManager.activateError,
+                    onReset: { hotkeyManager.activate = .activateDefault })
+                Divider().overlay(Theme.separator)
+                HotkeyRecorderField(
+                    title: "Unlock (Touch ID)",
+                    subtitle: "Only while the ward is active",
+                    combo: $hotkeyManager.unlock,
+                    error: hotkeyManager.unlockError,
+                    onReset: { hotkeyManager.unlock = .unlockDefault })
+            }
+            .wardCard()
+
+            HStack(spacing: 9) {
+                Image(systemName: "touchid")
+                    .font(.system(size: 16)).foregroundStyle(Theme.danger)
+                Text("Touch ID always unlocks the ward — even if a custom shortcut goes wrong.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .wardCard()
+        }
     }
 }
 

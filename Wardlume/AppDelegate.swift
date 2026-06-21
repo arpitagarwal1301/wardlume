@@ -151,7 +151,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         preferencesItem.target = self
         menu.addItem(preferencesItem)
 
-        unlockMenuItem = NSMenuItem(title: "Unlock with Touch ID (⌘⇧U)...",
+        unlockMenuItem = NSMenuItem(title: "Unlock with Touch ID (\(hotkeyManager.unlock.displayString))...",
                                     action: #selector(unlockWithBiometrics),
                                     keyEquivalent: "")
         unlockMenuItem?.target = self
@@ -184,18 +184,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
         statusBarItem?.menu = menu
 
-        // Global activation hotkey: ⌘⇧L toggles the ward from anywhere, even when
-        // Wardlume is not frontmost (e.g. while focused in an IDE). Uses Carbon so
-        // the combo is consumed and doesn’t leak to the foreground app.
-        // kVK_ANSI_L = 0x25. cmdKey | shiftKey from Carbon.HIToolbox.
-        activationHotkey = GlobalHotkey(
-            keyCode: UInt32(kVK_ANSI_L),
-            modifiers: UInt32(cmdKey | shiftKey)
-        ) { [weak self] in
-            self?.toggleWard()
+        // Global activation hotkey (configurable; default ⌘⇧L): toggles the ward
+        // from anywhere, even when Wardlume is not frontmost (e.g. focused in an
+        // IDE). Carbon-based so the combo is consumed and doesn't leak to the
+        // foreground app. Registered from HotkeyManager's persisted value.
+        if !registerActivationHotkey(hotkeyManager.activate) {
+            print("Wardlume [App]: failed to register global activation hotkey \(hotkeyManager.activate.displayString)")
         }
-        if activationHotkey == nil {
-            print("Wardlume [App]: failed to register global activation hotkey ⌘⇧L")
+
+        // Re-register when the user changes the activate combo; HotkeyManager rolls
+        // back to the previous combo if Carbon registration fails.
+        hotkeyManager.onActivateChanged = { [weak self] combo in
+            self?.registerActivationHotkey(combo) ?? false
+        }
+        // Push a changed unlock combo into the running tap and refresh the menu title.
+        hotkeyManager.onUnlockChanged = { [weak self] combo in
+            self?.inputLockManager?.setUnlockCombo(combo)
+            self?.refreshUnlockMenuTitle(combo)
         }
 
         // Phase 4a: initialize user asset slots from disk.
@@ -491,7 +496,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             let shortcutAttrs: [NSAttributedString.Key: Any] = [.font: shortcutFont, .foregroundColor: NSColor.white]
 
             let attrStr = NSMutableAttributedString(string: "Press ", attributes: normalAttrs)
-            attrStr.append(NSAttributedString(string: "⌘⇧U",        attributes: shortcutAttrs))
+            attrStr.append(NSAttributedString(string: hotkeyManager.unlock.displayString, attributes: shortcutAttrs))
             attrStr.append(NSAttributedString(string: " to unlock", attributes: normalAttrs))
 
             let label = NSTextField(labelWithString: "")
@@ -564,7 +569,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // between the preflight check above and here), the overlay is already on
         // screen but input is NOT locked. Tear the ward down and warn the user
         // rather than present a locked-LOOKING but fully-interactive screen.
-        guard lock.install(view: metalView, wardWindow: window) else {
+        guard lock.install(view: metalView, wardWindow: window, unlock: hotkeyManager.unlock) else {
             print("Wardlume [AppDelegate]: input lock failed to install — tearing down ward.")
             deactivateWard()
             let alert = NSAlert()
@@ -732,6 +737,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             guard let self, success, self.overlayWindow != nil else { return }
             self.toggleWard()
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // MARK: — Configurable hotkeys
+    // -------------------------------------------------------------------------
+
+    /// (Re)registers the global activation hotkey from `combo`. Drops the old
+    /// GlobalHotkey first — AppDelegate is its only strong reference, so deinit
+    /// runs synchronously and unregisters the Carbon hotkey before we register the
+    /// new one. Returns whether registration succeeded so HotkeyManager can roll
+    /// back to the previous combo on failure (e.g. the combo is already in use).
+    @discardableResult
+    func registerActivationHotkey(_ combo: HotkeyCombo) -> Bool {
+        activationHotkey = nil
+        activationHotkey = GlobalHotkey(
+            keyCode: UInt32(combo.keyCode),
+            modifiers: combo.carbonModifiers
+        ) { [weak self] in
+            self?.toggleWard()
+        }
+        return activationHotkey != nil
+    }
+
+    /// Updates the menu item title to reflect the current unlock combo. The
+    /// on-screen unlock hint is rebuilt from the current combo on the next ward
+    /// activation, so it isn't live-updated here.
+    private func refreshUnlockMenuTitle(_ combo: HotkeyCombo) {
+        unlockMenuItem?.title = "Unlock with Touch ID (\(combo.displayString))..."
     }
 
     // -------------------------------------------------------------------------
@@ -925,7 +958,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // Use a dummy (never-shown) NSWindow as the wardWindow so its windowNumber
         // is a valid but harmless CGWindowID for the whitelist exclusion check.
         let dummy = NSWindow()
-        lock.install(view: MetalOverlayView(frame: .zero), wardWindow: dummy)
+        lock.install(view: MetalOverlayView(frame: .zero), wardWindow: dummy, unlock: hotkeyManager.unlock)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
             guard let self, self.overlayWindow == nil else { return }
