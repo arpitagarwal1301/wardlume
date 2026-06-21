@@ -42,7 +42,7 @@ import AppKit
 /// - `.full`:    All effects — refraction + iridescent sheen + chromatic shimmer
 ///               + flowing rainbow border + drifting sigils + motes + chromatic
 ///               aberration on desktop pixels. Theatrical and "magical". Pairs
-///               with character packs (Grumpy, Wizard).
+///               with image-style character packs.
 /// - `.minimal`: Refraction only — sober glass over the desktop, no decoration.
 ///               For packs intended as a calm productivity shield where the user
 ///               wants to glance at the underlying terminal.
@@ -160,62 +160,6 @@ struct ReactionPack {
 
 extension ReactionPack {
 
-    // ── Grumpy Old Man ────────────────────────────────────────────────────────
-    /// Image pack. Assets: Reactions/Packs/grumpyOldMan/baseImage.png,
-    /// reactionImage.png, audio.mp3.
-    /// Phase 4a state: no assets in bundle → baseImageURL/reactionImageURL/audioURL
-    /// all nil → overlay renders gray bg + "GRUMPY OLD MAN" placeholder text.
-    static let grumpyOldMan = ReactionPack(
-        id:                      "grumpyOldMan",
-        name:                    "Grumpy Old Man",
-        duration:                3.0,
-        backgroundColor:         NSColor(red: 0.4, green: 0.4, blue: 0.42, alpha: 1.0),
-        baseImageBundleName:     "baseImage",
-        reactionImageBundleName: "reactionImage",
-        audioBundleName:         "audio",
-        placeholderText:         "GRUMPY OLD MAN",
-        baseImageURL:            Bundle.main.url(forResource: "baseImage",
-                                                 withExtension: "png",
-                                                 subdirectory: "Reactions/Packs/grumpyOldMan"),
-        reactionImageURL:        Bundle.main.url(forResource: "reactionImage",
-                                                 withExtension: "png",
-                                                 subdirectory: "Reactions/Packs/grumpyOldMan"),
-        audioURL:                Bundle.main.url(forResource: "audio",
-                                                 withExtension: "mp3",
-                                                 subdirectory: "Reactions/Packs/grumpyOldMan"),
-        style:                   .image,
-        shaderStyle:             .full,
-        hasCornerIndicator:      false
-    )
-
-    // ── Wizard ────────────────────────────────────────────────────────────────
-    /// Image pack. Assets: Reactions/Packs/wizard/baseImage.png,
-    /// reactionImage.png, audio.mp3.
-    /// Phase 4a state: no assets in bundle → baseImageURL/reactionImageURL/audioURL
-    /// all nil → overlay renders dark purple bg + "WIZARD" placeholder text.
-    static let wizard = ReactionPack(
-        id:                      "wizard",
-        name:                    "Wizard",
-        duration:                3.0,
-        backgroundColor:         NSColor(red: 0.2, green: 0.1, blue: 0.3, alpha: 1.0),
-        baseImageBundleName:     "baseImage",
-        reactionImageBundleName: "reactionImage",
-        audioBundleName:         "audio",
-        placeholderText:         "WIZARD",
-        baseImageURL:            Bundle.main.url(forResource: "baseImage",
-                                                 withExtension: "png",
-                                                 subdirectory: "Reactions/Packs/wizard"),
-        reactionImageURL:        Bundle.main.url(forResource: "reactionImage",
-                                                 withExtension: "png",
-                                                 subdirectory: "Reactions/Packs/wizard"),
-        audioURL:                Bundle.main.url(forResource: "audio",
-                                                 withExtension: "mp3",
-                                                 subdirectory: "Reactions/Packs/wizard"),
-        style:                   .image,
-        shaderStyle:             .full,
-        hasCornerIndicator:      false
-    )
-
     // ── Silent Professional ───────────────────────────────────────────────────
     /// Minimal pack. Fully implemented in code — no asset files ever needed.
     /// Renders: near-black background + 6pt red border frame + "ACCESS DENIED".
@@ -246,8 +190,6 @@ extension ReactionPack {
     /// custom pack folders.
     static let builtIn: [ReactionPack] = [
         .silentProfessional,
-        .grumpyOldMan,
-        .wizard,
     ]
 
     /// All packs available in this session.

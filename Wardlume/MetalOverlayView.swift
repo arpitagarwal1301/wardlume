@@ -140,7 +140,14 @@ class MetalOverlayView: MTKView {
     // MARK: — Pipeline construction
     // ---------------------------------------------------------------------------
     private func buildPipeline() {
-        guard let device = device else { return }
+        // init() already fatalErrors on a nil Metal device, so device is non-nil
+        // here. We fatalError rather than silently return so commandQueue /
+        // pipelineState (implicitly-unwrapped optionals used in draw()) are never
+        // left nil — a silent return would turn the first draw() into a crash with
+        // a far less obvious cause.
+        guard let device = device else {
+            fatalError("Wardlume: buildPipeline called with no Metal device.")
+        }
 
         guard let library = device.makeDefaultLibrary() else {
             fatalError("Wardlume: Could not load Metal shader library. " +
@@ -179,7 +186,10 @@ class MetalOverlayView: MTKView {
             pixelFormat: .bgra8Unorm, width: 1, height: 1, mipmapped: false)
         fallback.usage       = [.shaderRead]
         fallback.storageMode = .shared
-        desktopTexture = device.makeTexture(descriptor: fallback)!
+        guard let fallbackTexture = device.makeTexture(descriptor: fallback) else {
+            fatalError("Wardlume: failed to create the 1×1 fallback desktop texture.")
+        }
+        desktopTexture = fallbackTexture
         // Texture memory is zero-initialised (BGRA 0,0,0,0 = transparent black).
         // The shader treats alpha=1 as the window is opaque, so the first frame
         // will show a black screen until the first real desktop frame arrives

@@ -20,6 +20,16 @@ import CoreVideo
 import Metal
 import AppKit
 
+/// Notified when the capture stream stops unexpectedly (e.g. Screen Recording
+/// permission revoked mid-session). The ward's input lock is independent of the
+/// stream, so without this the overlay would freeze on its last frame while
+/// input stays fully locked — a lockout behind a stale image. The delegate is
+/// expected to tear the ward down so the user can recover.
+@MainActor
+protocol DesktopCaptureManagerDelegate: AnyObject {
+    func desktopCaptureDidStop(_ manager: DesktopCaptureManager, error: Error?)
+}
+
 final class DesktopCaptureManager: NSObject {
 
     // MTLDevice is accessed from the nonisolated SCStreamOutput callback.
@@ -29,7 +39,15 @@ final class DesktopCaptureManager: NSObject {
     // Accessed only inside Task { @MainActor in … } dispatches.
     private weak var view: MetalOverlayView?
 
+    /// Notified on the MainActor when the stream stops unexpectedly.
+    weak var captureDelegate: DesktopCaptureManagerDelegate?
+
     private var stream: SCStream?
+
+    /// Set true by stopCapture() so the SCStreamDelegate didStopWithError path can
+    /// distinguish an intentional teardown (no delegate notification) from an
+    /// unexpected stop such as permission revocation (notify so the ward recovers).
+    nonisolated(unsafe) private var intentionalStop = false
 
     init(device: MTLDevice, view: MetalOverlayView) {
         self.device = device
@@ -54,6 +72,7 @@ final class DesktopCaptureManager: NSObject {
 
     func stopCapture() {
         guard let stream else { return }
+        intentionalStop = true   // suppress the didStopWithError recovery path
         self.stream = nil
         Task {
             try? await stream.stopCapture()
@@ -181,8 +200,17 @@ extension DesktopCaptureManager: SCStreamDelegate {
     /// Called if the stream stops unexpectedly (e.g. permission revoked).
     nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
         print("Wardlume [DesktopCaptureManager]: SCStream stopped — \(error)")
+        let wasIntentional = intentionalStop
         Task { @MainActor [weak self] in
-            self?.stream = nil
+            guard let self else { return }
+            self.stream = nil
+            // Only escalate if WE didn't ask it to stop. An unexpected stop while
+            // the ward is up (Screen Recording revoked, display reconfig) would
+            // otherwise leave the overlay frozen on its last frame with input
+            // still locked — notify the delegate to tear the ward down.
+            if !wasIntentional {
+                self.captureDelegate?.desktopCaptureDidStop(self, error: error)
+            }
         }
     }
 }

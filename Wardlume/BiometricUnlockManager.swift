@@ -23,6 +23,12 @@ final class BiometricUnlockManager {
 
     private var activeContext: LAContext?
 
+    /// True while an evaluateUnlock call is in flight. Cmd+Shift+U is dispatched
+    /// from the CGEventTap callback, so a burst of presses could otherwise stack
+    /// multiple SecurityAgent prompts. We ignore re-entrant calls until the
+    /// current evaluation finishes. Touched only on the main thread.
+    private var isEvaluating = false
+
     private init() {}
 
     /// Checks if biometrics (Touch ID) are available and enrolled on the device.
@@ -38,6 +44,14 @@ final class BiometricUnlockManager {
     ///   - reason: The localized text displayed to the user explaining why authentication is requested.
     ///   - completion: Callback executed on the main thread with a boolean result (success) and an optional error.
     func evaluateUnlock(reason: String, completion: @escaping (Bool, Error?) -> Void) {
+        // Debounce re-entrant presses (Cmd+Shift+U is dispatched from the tap
+        // callback and could fire in a burst). Ignore while a prompt is in flight.
+        if isEvaluating {
+            print("Wardlume [BiometricUnlockManager]: unlock already in progress — ignoring repeat request.")
+            return
+        }
+        isEvaluating = true
+
         // Invalidate any active context to dismiss stuck or redundant prompts
         activeContext?.invalidate()
 
@@ -62,7 +76,8 @@ final class BiometricUnlockManager {
             } else {
                 // Neither biometrics nor passcode/password is set up on this Mac.
                 // Call completion with false and the underlying error.
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
+                    self?.isEvaluating = false
                     completion(false, error ?? fallbackError)
                 }
                 return
@@ -71,6 +86,7 @@ final class BiometricUnlockManager {
 
         context.evaluatePolicy(policy, localizedReason: reason) { success, evalError in
             DispatchQueue.main.async { [weak self] in
+                self?.isEvaluating = false
                 // Clear active context reference if it's the current one
                 if self?.activeContext === context {
                     self?.activeContext = nil
@@ -84,5 +100,6 @@ final class BiometricUnlockManager {
     func cancelActiveAuthentication() {
         activeContext?.invalidate()
         activeContext = nil
+        isEvaluating = false
     }
 }

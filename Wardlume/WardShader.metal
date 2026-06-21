@@ -29,6 +29,11 @@ struct ShaderParams {
     float aspectRatio;       // screen width ÷ height. MacBook 14/16" ≈ 1.55, iMac 24" ≈ 1.78
     float lastIntrusionT;    // shader time of last intercepted input event; -9999 = none
     float minimalMode;       // Phase 5a: 1.0 = minimal mode, 0.0 = full mode
+    float reduceMotion;      // 1.0 = Reduce Motion on. Currently applied CPU-side
+                             // (rippleStrength/shimmerIntensity are zeroed in
+                             // MetalOverlayView), so this field exists only to keep
+                             // the struct byte-for-byte identical to Swift. Reading
+                             // it here is optional; included for layout parity.
 };
 
 // ---------------------------------------------------------------------------
