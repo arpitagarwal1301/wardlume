@@ -310,7 +310,7 @@ final class ReactionManager: ObservableObject {
             window.backgroundColor  = .black
         }
         window.hasShadow            = false
-        window.ignoresMouseEvents   = true   // pass-through so Cmd+Shift+W still reaches the tap
+        window.ignoresMouseEvents   = true   // mouse-transparent so clicks fall through to the event tap
 
         // ── Content view ──────────────────────────────────────────────────────
         // ReactionOverlayView.make() routes to the correct rendering path:

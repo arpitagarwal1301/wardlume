@@ -1,0 +1,88 @@
+<svg viewBox="0 0 1200 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Wardlume — a botsitting ward for your Mac">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1512"/>
+      <stop offset="0.6" stop-color="#0a1016"/>
+      <stop offset="1" stop-color="#0d0c18"/>
+    </linearGradient>
+    <linearGradient id="win" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#11201b"/>
+      <stop offset="1" stop-color="#0a1310"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9fe7cd" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#3fae8a" stop-opacity="0.05"/>
+    </linearGradient>
+    <radialGradient id="orb" cx="0.4" cy="0.35" r="0.7">
+      <stop offset="0" stop-color="#bdf6e2"/>
+      <stop offset="0.4" stop-color="#37b690"/>
+      <stop offset="1" stop-color="#0b2a22"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0 L0 0 0 40" fill="none" stroke="#ffffff" stroke-opacity="0.03" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="560" fill="url(#bg)"/>
+  <rect width="1200" height="560" fill="url(#grid)"/>
+
+  <g>
+    <rect x="70" y="58" width="196" height="38" rx="19" fill="none" stroke="#34c98e" stroke-opacity="0.5"/>
+    <text x="168" y="83" text-anchor="middle" font-family="-apple-system, Helvetica, sans-serif" font-size="15" font-weight="600" fill="#6fe3b4" letter-spacing="0.5">macOS Tahoe 26+</text>
+
+    <text x="68" y="190" font-family="-apple-system, Helvetica, sans-serif" font-size="88" font-weight="800" fill="#ffffff" letter-spacing="-1">Wardlume</text>
+
+    <text x="72" y="240" font-family="-apple-system, Helvetica, sans-serif" font-size="20" font-weight="500" fill="#aab8b2">
+      <tspan x="72" dy="0">Botsitting your AI agents? Wardlume locks the keyboard,</tspan>
+      <tspan x="72" dy="29">mouse, and trackpad behind an animated glass shield.</tspan>
+      <tspan x="72" dy="29">Anyone can watch the screen; no one can touch it — and</tspan>
+      <tspan x="72" dy="29">a wrong touch springs a fun bait-and-switch reaction.</tspan>
+    </text>
+
+    <g font-family="-apple-system, Helvetica, sans-serif" font-size="16" font-weight="500" fill="#6fe3b4">
+      <rect x="70" y="386" width="116" height="40" rx="20" fill="#11201b" stroke="#34c98e" stroke-opacity="0.3"/>
+      <text x="128" y="411" text-anchor="middle">Input lock</text>
+      <rect x="198" y="386" width="166" height="40" rx="20" fill="#11201b" stroke="#34c98e" stroke-opacity="0.3"/>
+      <text x="281" y="411" text-anchor="middle">Touch ID unlock</text>
+      <rect x="376" y="386" width="140" height="40" rx="20" fill="#11201b" stroke="#34c98e" stroke-opacity="0.3"/>
+      <text x="446" y="411" text-anchor="middle">Glass shield</text>
+
+      <rect x="70" y="438" width="204" height="40" rx="20" fill="#11201b" stroke="#34c98e" stroke-opacity="0.3"/>
+      <text x="172" y="463" text-anchor="middle">Configurable hotkeys</text>
+      <rect x="286" y="438" width="240" height="40" rx="20" fill="#11201b" stroke="#34c98e" stroke-opacity="0.3"/>
+      <text x="406" y="463" text-anchor="middle">Bait-and-switch reactions</text>
+    </g>
+
+    <text x="72" y="520" font-family="-apple-system, Helvetica, sans-serif" font-size="16" font-weight="500" fill="#7e8e87">Local-only  ·  No data leaves your Mac  ·  Source-available</text>
+  </g>
+
+  <g>
+    <rect x="650" y="84" width="478" height="402" rx="20" fill="url(#win)" stroke="#ffffff" stroke-opacity="0.10"/>
+    <circle cx="684" cy="118" r="6" fill="#e24b4a"/>
+    <circle cx="704" cy="118" r="6" fill="#ef9f27"/>
+    <circle cx="724" cy="118" r="6" fill="#97c459"/>
+    <text x="684" y="160" font-family="-apple-system, Helvetica, sans-serif" font-size="18" font-weight="600" fill="#dfe9e5">Wardlume</text>
+    <text x="684" y="184" font-family="-apple-system, Helvetica, sans-serif" font-size="14" font-weight="600" fill="#6fe3b4">Warded — input locked</text>
+
+    <circle cx="1086" cy="128" r="36" fill="url(#orb)"/>
+    <circle cx="1086" cy="128" r="36" fill="none" stroke="#6fe3b4" stroke-opacity="0.35"/>
+    <circle cx="1074" cy="116" r="9" fill="#eafff6" opacity="0.7"/>
+
+    <rect x="676" y="208" width="426" height="250" rx="14" fill="#0a120f" stroke="#ffffff" stroke-opacity="0.06"/>
+    <g fill="#3ad29a" opacity="0.55" font-family="monospace" font-size="13">
+      <text x="694" y="240">$ agent build --watch</text>
+      <text x="694" y="266" fill="#7e8e87">› compiling modules…</text>
+      <text x="694" y="292" fill="#7e8e87">› running tests  ✓ 142 passed</text>
+      <text x="694" y="318">› deploying preview…</text>
+    </g>
+
+    <rect x="676" y="208" width="426" height="250" rx="14" fill="url(#glass)" stroke="#ffffff" stroke-opacity="0.12"/>
+
+    <path d="M838 250 Q838 238 850 238 L924 238 Q936 238 936 250 L936 308 Q936 348 887 366 Q838 348 838 308 Z" fill="#e7efeb" fill-opacity="0.95"/>
+    <rect x="869" y="296" width="36" height="30" rx="6" fill="#11201b"/>
+    <path d="M875 296 v-9 a12 12 0 0 1 24 0 v9" fill="none" stroke="#11201b" stroke-width="7"/>
+
+    <rect x="806" y="392" width="162" height="38" rx="19" fill="#000000" fill-opacity="0.45" stroke="#ffffff" stroke-opacity="0.15"/>
+    <text x="887" y="416" text-anchor="middle" font-family="-apple-system, Helvetica, sans-serif" font-size="15" font-weight="600" fill="#e7efeb">Input locked</text>
+  </g>
+</svg>
