@@ -28,6 +28,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     /// activate/deactivate cycles (never reset to nil on ward toggle).
     var reactionManager: ReactionManager?
 
+    /// Settings revamp: AppKit→SwiftUI bridge + persisted prefs + configurable
+    /// hotkeys, all injected into the settings window as environment objects.
+    /// `wardState` mirrors the ward-active state (and live permission flags) for
+    /// SwiftUI panes; AppDelegate stays the authoritative ward-lifecycle owner.
+    /// `wardPrefs` and `hotkeyManager` follow the ReactionManager persistence pattern.
+    var wardState: WardState!
+    let wardPrefs = WardPrefs()
+    let hotkeyManager = HotkeyManager()
+
     /// Phase 2.5c: owns the preferences window lifecycle. Created on first
     /// openPreferences() call and reused for subsequent opens.
     var preferencesWindow: NSWindow?
@@ -78,6 +87,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     /// .popUpMenu so the dropdown is clickable; the watchdog must not fight that by
     /// re-raising / re-leveling the window during that window.
     private var menuIsOpen = false
+
+    /// True while a Touch ID / password prompt is on screen. The ward is lowered
+    /// beneath the SecurityAgent prompt during this window (it sits at
+    /// CGShieldingWindowLevel, which would otherwise cover the prompt); the
+    /// keep-on-top watchdog must stand down so it doesn't re-raise over the prompt.
+    private var isAuthenticating = false
+
+    /// systemUptime when the ward last activated. Reactions are suppressed for
+    /// `activationGraceSeconds` afterward so the activating input (the ⌘⇧L press,
+    /// a mouse-up, modifier release) isn't itself treated as an intrusion the
+    /// instant the ward comes up.
+    private var wardActivatedAt: TimeInterval = 0
+    private let activationGraceSeconds: TimeInterval = 5.0
 
     // -------------------------------------------------------------------------
     // MARK: — Application launch
@@ -142,7 +164,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         preferencesItem.target = self
         menu.addItem(preferencesItem)
 
-        unlockMenuItem = NSMenuItem(title: "Unlock with Touch ID (⌘⇧U)...",
+        unlockMenuItem = NSMenuItem(title: "Unlock with Touch ID (\(hotkeyManager.unlock.displayString))...",
                                     action: #selector(unlockWithBiometrics),
                                     keyEquivalent: "")
         unlockMenuItem?.target = self
@@ -175,18 +197,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
         statusBarItem?.menu = menu
 
-        // Global activation hotkey: ⌘⇧L toggles the ward from anywhere, even when
-        // Wardlume is not frontmost (e.g. while focused in an IDE). Uses Carbon so
-        // the combo is consumed and doesn’t leak to the foreground app.
-        // kVK_ANSI_L = 0x25. cmdKey | shiftKey from Carbon.HIToolbox.
-        activationHotkey = GlobalHotkey(
-            keyCode: UInt32(kVK_ANSI_L),
-            modifiers: UInt32(cmdKey | shiftKey)
-        ) { [weak self] in
-            self?.toggleWard()
+        // Global activation hotkey (configurable; default ⌘⇧L): toggles the ward
+        // from anywhere, even when Wardlume is not frontmost (e.g. focused in an
+        // IDE). Carbon-based so the combo is consumed and doesn't leak to the
+        // foreground app. Registered from HotkeyManager's persisted value.
+        if !registerActivationHotkey(hotkeyManager.activate) {
+            print("Wardlume [App]: failed to register global activation hotkey \(hotkeyManager.activate.displayString)")
         }
-        if activationHotkey == nil {
-            print("Wardlume [App]: failed to register global activation hotkey ⌘⇧L")
+
+        // Re-register when the user changes the activate combo; HotkeyManager rolls
+        // back to the previous combo if Carbon registration fails.
+        hotkeyManager.onActivateChanged = { [weak self] combo in
+            self?.registerActivationHotkey(combo) ?? false
+        }
+        // Push a changed unlock combo into the running tap and refresh the menu title.
+        hotkeyManager.onUnlockChanged = { [weak self] combo in
+            self?.inputLockManager?.setUnlockCombo(combo)
+            self?.refreshUnlockMenuTitle(combo)
+        }
+        // Push emergency-exit changes (enabled + combo) into the running tap.
+        hotkeyManager.onEmergencyChanged = { [weak self] enabled, combo in
+            self?.inputLockManager?.setEmergencyExit(enabled: enabled, combo: combo)
         }
 
         // Phase 4a: initialize user asset slots from disk.
@@ -205,6 +236,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // window IDs can be tracked (prevents reaction overlay from being
         // whitelisted and leaking input to background apps).
         reactionManager?.inputLockManager = inputLockManager
+
+        // Settings revamp: create the SwiftUI bridge state and forward toggle()
+        // calls from the settings panes to the authoritative ward lifecycle here.
+        wardState = WardState()
+        wardState.onToggle = { [weak self] in self?.toggleWard() }
+        wardState.recheckPermissions()
 
         // Crash recovery: if a previous ward session crashed while gestures were
         // disabled, GestureBlocker restores them here before anything else runs.
@@ -310,6 +347,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         toggleMenuItem?.keyEquivalent = "l"
         toggleMenuItem?.keyEquivalentModifierMask = [.command, .shift]
         unlockMenuItem?.isEnabled = false
+
+        // Mirror ward-inactive state for the SwiftUI settings panes. Covers every
+        // teardown path (hotkey, sleep, watchdog, unlock, quit) since they all
+        // route through deactivateWard().
+        wardState?.isActive = false
     }
 
     /// Brings the ward up: permission gate → window(s) → capture → input lock.
@@ -393,8 +435,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // Phase 4b: layer base image above the Metal shader if one is resolved.
         let activePack = reactionManager?.activePack ?? .silentProfessional
 
-        // Phase 5a: set shader mode based on pack's shaderStyle
-        metalView.params.minimalMode = (activePack.shaderStyle == .minimal) ? 1.0 : 0.0
+        // The ward shader is always the sober minimal glass. Character packs show
+        // their bundled base image over it anyway, so the shader is only visible
+        // for the default Silent Professional ward.
+        metalView.params.minimalMode = 1.0
 
         if let baseURL = ReactionPack.resolvedBaseImageURL(for: activePack),
            let image = NSImage(contentsOf: baseURL) {
@@ -471,7 +515,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
             let shortcutAttrs: [NSAttributedString.Key: Any] = [.font: shortcutFont, .foregroundColor: NSColor.white]
 
             let attrStr = NSMutableAttributedString(string: "Press ", attributes: normalAttrs)
-            attrStr.append(NSAttributedString(string: "⌘⇧U",        attributes: shortcutAttrs))
+            attrStr.append(NSAttributedString(string: hotkeyManager.unlock.displayString, attributes: shortcutAttrs))
             attrStr.append(NSAttributedString(string: " to unlock", attributes: normalAttrs))
 
             let label = NSTextField(labelWithString: "")
@@ -544,7 +588,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // between the preflight check above and here), the overlay is already on
         // screen but input is NOT locked. Tear the ward down and warn the user
         // rather than present a locked-LOOKING but fully-interactive screen.
-        guard lock.install(view: metalView, wardWindow: window) else {
+        guard lock.install(view: metalView, wardWindow: window, unlock: hotkeyManager.unlock) else {
             print("Wardlume [AppDelegate]: input lock failed to install — tearing down ward.")
             deactivateWard()
             let alert = NSAlert()
@@ -569,6 +613,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // events our head-insert read-write tap consumes.
         lock.onUnlockHotkey = { [weak self] in self?.unlockWithBiometrics() }
 
+        // Emergency exit ("panic"): tear the ward down immediately, no auth. Only
+        // fires when the user has enabled it in Shortcuts. Push the current state
+        // into the freshly-installed tap.
+        lock.onPanic = { [weak self] in self?.deactivateWard() }
+        lock.setEmergencyExit(enabled: hotkeyManager.emergencyExitEnabled,
+                              combo: hotkeyManager.emergencyExit)
+
         // Phase 2.5a: wire intrusion events to the reaction engine.
         // ReactionManager.trigger() enforces its own cooldown — this fires
         // on every consumed event regardless of the border-pulse debounce.
@@ -577,6 +628,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // Both flash methods guard on their own view; safe to call unconditionally.
         lock.onIntrusion = { [weak self] in
             guard let self else { return }
+            // Don't fire reactions while the Touch ID / password prompt is up — the
+            // user is authenticating, not intruding, and a reaction overlay would
+            // pop over (or beside) the prompt.
+            guard !self.isAuthenticating else { return }
+            // Grace period right after activation: the user's own activation input
+            // (the ⌘⇧L press, mouse-up, modifier release) isn't an intrusion.
+            guard ProcessInfo.processInfo.systemUptime - self.wardActivatedAt > self.activationGraceSeconds else { return }
             self.reactionManager?.trigger()
             CATransaction.begin()
             self.flashIndicator()
@@ -585,12 +643,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         }
 
         // Block system trackpad gestures (Mission Control, Spaces, Launchpad, etc.)
-        // for the duration of this ward session. Restored by deactivateWard() or
-        // automatically on next launch via GestureBlocker.recoverIfNeeded().
-        GestureBlocker.shared.activate()
+        // for the duration of this ward session — only if the user hasn't turned it
+        // off in Behavior. Restored by deactivateWard() or, after a crash, by
+        // GestureBlocker.recoverIfNeeded() at next launch (which is NOT gated).
+        if wardPrefs.blockGestures {
+            GestureBlocker.shared.activate()
+        }
 
         // Start the keep-on-top watchdog.
         startWardWatchdog()
+
+        // Mirror ward-active state for the SwiftUI settings panes.
+        wardState.isActive = true
+
+        // Start the reaction grace period (see wardActivatedAt): ignore intrusions
+        // briefly so the activation input isn't treated as one.
+        wardActivatedAt = ProcessInfo.processInfo.systemUptime
     }
 
     // -------------------------------------------------------------------------
@@ -649,7 +717,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         guard let window = overlayWindow else { stopWardWatchdog(); return }
 
         // Don't fight the menu: menuWillOpen intentionally lowers the level.
-        if menuIsOpen { return }
+        if menuIsOpen || isAuthenticating { return }
 
         let shieldLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
         let displaced = window.isMiniaturized
@@ -703,12 +771,60 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     // -------------------------------------------------------------------------
 
     @objc func unlockWithBiometrics() {
+        // The ward sits at CGShieldingWindowLevel, which would cover the system
+        // Touch ID / password prompt. Lower the ward (and the secondary blackouts)
+        // beneath the prompt for the duration of authentication, and pause the
+        // keep-on-top watchdog (isAuthenticating) so it doesn't re-raise the ward
+        // over the prompt. Input stays locked the whole time (the tap is unaffected).
+        if overlayWindow != nil {
+            isAuthenticating = true
+            reactionManager?.dismissReaction()   // clear any in-flight reaction so it can't overlap the prompt
+            overlayWindow?.level = .screenSaver
+            for w in secondaryOverlayWindows { w.level = .screenSaver }
+        }
+
         BiometricUnlockManager.shared.evaluateUnlock(
             reason: "Authenticate to deactivate the Wardlume ward."
         ) { [weak self] success, _ in
-            guard let self, success, self.overlayWindow != nil else { return }
-            self.toggleWard()
+            guard let self else { return }
+            self.isAuthenticating = false
+            if success, self.overlayWindow != nil {
+                self.toggleWard()                       // authenticated — tear the ward down
+            } else if self.overlayWindow != nil {
+                // Cancelled / failed — restore the ward to shielding level.
+                let shield = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+                self.overlayWindow?.level = shield
+                for w in self.secondaryOverlayWindows { w.level = shield }
+            }
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // MARK: — Configurable hotkeys
+    // -------------------------------------------------------------------------
+
+    /// (Re)registers the global activation hotkey from `combo`. Drops the old
+    /// GlobalHotkey first — AppDelegate is its only strong reference, so deinit
+    /// runs synchronously and unregisters the Carbon hotkey before we register the
+    /// new one. Returns whether registration succeeded so HotkeyManager can roll
+    /// back to the previous combo on failure (e.g. the combo is already in use).
+    @discardableResult
+    func registerActivationHotkey(_ combo: HotkeyCombo) -> Bool {
+        activationHotkey = nil
+        activationHotkey = GlobalHotkey(
+            keyCode: UInt32(combo.keyCode),
+            modifiers: combo.carbonModifiers
+        ) { [weak self] in
+            self?.toggleWard()
+        }
+        return activationHotkey != nil
+    }
+
+    /// Updates the menu item title to reflect the current unlock combo. The
+    /// on-screen unlock hint is rebuilt from the current combo on the next ward
+    /// activation, so it isn't live-updated here.
+    private func refreshUnlockMenuTitle(_ combo: HotkeyCombo) {
+        unlockMenuItem?.title = "Unlock with Touch ID (\(combo.displayString))..."
     }
 
     // -------------------------------------------------------------------------
@@ -781,37 +897,45 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     // -------------------------------------------------------------------------
 
     @objc func openPreferences() {
+        // Refresh live permission flags whenever the window is summoned.
+        wardState?.recheckPermissions()
+
         if let window = preferencesWindow {
-            // Window exists: bring to front
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
-        } else {
-            // Create new window
-            guard let reactionManager = reactionManager else { return }
-            let contentView = PreferencesView(reactionManager: reactionManager)
-            let hostingController = NSHostingController(rootView: contentView)
-            
-            // Let the hosting controller communicate SwiftUI's intrinsic size to the window
-            hostingController.sizingOptions = [.intrinsicContentSize]
-            
-            // Use contentViewController initializer so window sizes itself to content
-            let window = NSWindow(contentViewController: hostingController)
-            window.title = "Wardlume Preferences"
-            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            
-            // Set initial content size hint (larger than minimum for breathing room)
-            window.setContentSize(NSSize(width: 520, height: 450))
-            
-            // Minimum window frame size (includes ~28pt title bar, ensures 480×400 content area)
-            window.minSize = NSSize(width: 480, height: 428)
-            
-            window.center()
-            window.isReleasedWhenClosed = false
-            window.delegate = self
-            
-            preferencesWindow = window
-            window.makeKeyAndOrderFront(nil)
+            return
         }
+
+        guard let reactionManager = reactionManager else { return }
+
+        // Host the revamped dark sidebar settings UI. Every observable the panes
+        // need is injected as an environment object so SwiftUI never reaches into
+        // AppKit directly.
+        let root = SettingsRootView()
+            .environmentObject(wardState)
+            .environmentObject(wardPrefs)
+            .environmentObject(hotkeyManager)
+            .environmentObject(reactionManager)
+            .environmentObject(UserAssetManager.shared)
+
+        let hostingController = NSHostingController(rootView: root)
+
+        // NavigationSplitView has NO intrinsic content size — using
+        // .intrinsicContentSize sizing would open the window zero-sized. Set
+        // explicit content + minimum sizes instead.
+        let window = NSWindow(contentViewController: hostingController)
+        window.title       = "Wardlume Settings"
+        window.styleMask   = [.titled, .closable, .miniaturizable, .resizable]
+        window.appearance  = NSAppearance(named: .darkAqua)   // pin dark; never leaks to the ward/menu
+        window.setContentSize(NSSize(width: 820, height: 640))
+        window.minSize     = NSSize(width: 760, height: 560)
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.delegate    = self
+
+        preferencesWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     // -------------------------------------------------------------------------
@@ -861,8 +985,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // deactivated via ⌘⇧U (Touch ID) or the ⌘⇧L toggle while the menu was
         // open (overlayWindow would be nil) — in that case, there's nothing to restore.
         menuIsOpen = false
-        overlayWindow?.level = .screenSaver
-        for w in secondaryOverlayWindows { w.level = .screenSaver }
+        let shield = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+        overlayWindow?.level = shield
+        for w in secondaryOverlayWindows { w.level = shield }
     }
 
     // -------------------------------------------------------------------------
@@ -894,7 +1019,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // Use a dummy (never-shown) NSWindow as the wardWindow so its windowNumber
         // is a valid but harmless CGWindowID for the whitelist exclusion check.
         let dummy = NSWindow()
-        lock.install(view: MetalOverlayView(frame: .zero), wardWindow: dummy)
+        lock.install(view: MetalOverlayView(frame: .zero), wardWindow: dummy, unlock: hotkeyManager.unlock)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
             guard let self, self.overlayWindow == nil else { return }
@@ -917,6 +1042,16 @@ extension AppDelegate: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         if notification.object as? NSWindow === preferencesWindow {
             preferencesWindow = nil
+        }
+    }
+
+    /// Pull-based permission refresh: when the user returns to the settings window
+    /// (e.g. after granting a permission in System Settings), recheck so the
+    /// Overview checklist reflects reality. (Screen Recording may still need a
+    /// relaunch — its preflight value is process-cached.)
+    func windowDidBecomeKey(_ notification: Notification) {
+        if notification.object as? NSWindow === preferencesWindow {
+            wardState?.recheckPermissions()
         }
     }
 }

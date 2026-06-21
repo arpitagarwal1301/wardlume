@@ -1,3 +1,8 @@
-
 # Xcode per-user state
 xcuserdata/
+
+# Build output
+build/
+
+# Release artifacts (built + uploaded to GitHub Releases, not committed)
+*.dmg

@@ -46,7 +46,7 @@ import AppKit
 /// - `.minimal`: Refraction only — sober glass over the desktop, no decoration.
 ///               For packs intended as a calm productivity shield where the user
 ///               wants to glance at the underlying terminal.
-enum ShaderStyle {
+enum ShaderStyle: String {
     case full
     case minimal
 }
@@ -160,6 +160,60 @@ struct ReactionPack {
 
 extension ReactionPack {
 
+    // ── Grumpy Old Man ──────────────────────────────────────────────────────────
+    /// Image pack. Bundled assets in Reactions/Packs/grumpyOldMan/ (baseImage.png,
+    /// reactionImage.png, audio.mp3). Base image shows while warded; the reaction
+    /// image + audio fire on intrusion. Resolved via the folder reference
+    /// (explicitFolders = Reactions in the build target).
+    static let grumpyOldMan = ReactionPack(
+        id:                      "grumpyOldMan",
+        name:                    "Grumpy Old Man",
+        duration:                3.0,
+        backgroundColor:         NSColor(red: 0.4, green: 0.4, blue: 0.42, alpha: 1.0),
+        baseImageBundleName:     "baseImage",
+        reactionImageBundleName: "reactionImage",
+        audioBundleName:         "audio",
+        placeholderText:         "GRUMPY OLD MAN",
+        baseImageURL:            Bundle.main.url(forResource: "baseImage",
+                                                 withExtension: "png",
+                                                 subdirectory: "Reactions/Packs/grumpyOldMan"),
+        reactionImageURL:        Bundle.main.url(forResource: "reactionImage",
+                                                 withExtension: "png",
+                                                 subdirectory: "Reactions/Packs/grumpyOldMan"),
+        audioURL:                Bundle.main.url(forResource: "audio",
+                                                 withExtension: "mp3",
+                                                 subdirectory: "Reactions/Packs/grumpyOldMan"),
+        style:                   .image,
+        shaderStyle:             .full,
+        hasCornerIndicator:      false
+    )
+
+    // ── Wizard ────────────────────────────────────────────────────────────────
+    /// Image pack. Bundled assets in Reactions/Packs/wizard/ (baseImage.png,
+    /// reactionImage.png, audio.mp3).
+    static let wizard = ReactionPack(
+        id:                      "wizard",
+        name:                    "Wizard",
+        duration:                3.0,
+        backgroundColor:         NSColor(red: 0.2, green: 0.1, blue: 0.3, alpha: 1.0),
+        baseImageBundleName:     "baseImage",
+        reactionImageBundleName: "reactionImage",
+        audioBundleName:         "audio",
+        placeholderText:         "WIZARD",
+        baseImageURL:            Bundle.main.url(forResource: "baseImage",
+                                                 withExtension: "png",
+                                                 subdirectory: "Reactions/Packs/wizard"),
+        reactionImageURL:        Bundle.main.url(forResource: "reactionImage",
+                                                 withExtension: "png",
+                                                 subdirectory: "Reactions/Packs/wizard"),
+        audioURL:                Bundle.main.url(forResource: "audio",
+                                                 withExtension: "mp3",
+                                                 subdirectory: "Reactions/Packs/wizard"),
+        style:                   .image,
+        shaderStyle:             .full,
+        hasCornerIndicator:      false
+    )
+
     // ── Silent Professional ───────────────────────────────────────────────────
     /// Minimal pack. Fully implemented in code — no asset files ever needed.
     /// Renders: near-black background + 6pt red border frame + "ACCESS DENIED".
@@ -190,6 +244,8 @@ extension ReactionPack {
     /// custom pack folders.
     static let builtIn: [ReactionPack] = [
         .silentProfessional,
+        .grumpyOldMan,
+        .wizard,
     ]
 
     /// All packs available in this session.

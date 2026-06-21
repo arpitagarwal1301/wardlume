@@ -2,24 +2,30 @@
 
 ## Escape Hatches (every user must know these)
 
-Two reliable ways to deactivate the ward, in priority order:
+Ways to deactivate the ward, in priority order:
 
-1. **Cmd+Shift+U** — Trigger Touch ID prompt.
-   Handled inside the CGEventTap callback. Opens the native macOS Touch ID sheet
-   via LocalAuthentication. Falls back to password if biometric is locked out or
-   unavailable. Repeated rapid presses are debounced so they can't stack multiple
-   prompts.
+1. **Touch ID (⌘⇧U by default)** — Trigger the Touch ID prompt.
+   Handled inside the CGEventTap callback so it fires even while input is locked.
+   Opens the native macOS Touch ID sheet via LocalAuthentication; falls back to
+   your password if biometrics are locked out or unavailable. The unlock shortcut
+   is configurable in **Settings → Shortcuts**. Rapid presses are debounced so they
+   can't stack prompts. While the prompt is up the ward briefly drops beneath it so
+   it stays visible — input remains locked the whole time.
 
 2. **Cmd+Option+Esc** — Force Quit Wardlume.
-   macOS-reserved shortcut that no third-party app can intercept. Use this
-   if the Touch ID path fails. Sleep (closing the lid) is also a guaranteed
-   exit — sleep tears down event taps, and Wardlume explicitly deactivates
-   the ward on sleep/screen-sleep so it can never wake into a "looks locked but
+   macOS-reserved shortcut that no third-party app can intercept; quitting the app
+   tears the ward down. Sleep (closing the lid) is also a guaranteed exit — Wardlume
+   deactivates on sleep/screen-sleep so it can never wake into a "looks locked but
    isn't" state.
 
-> **Note:** Cmd+Shift+W is intentionally NOT an escape hatch. It is consumed
-> silently like any other blocked keystroke while the ward is active. Use
-> Cmd+Shift+U or Cmd+Option+Esc instead.
+3. **Emergency-exit key (optional, OFF by default)** — A user-configurable hotkey
+   (default ⌘⇧W) that instantly drops the ward with **no authentication**. Enable it
+   in **Settings → Shortcuts** only if you want a guaranteed escape from a lockout;
+   while enabled, anyone at the keyboard can use it.
+
+> **Note:** With emergency exit off (the default), ⌘⇧W is consumed silently like any
+> other blocked keystroke — it is *not* an escape. It deactivates the ward only if
+> you've enabled emergency exit and kept ⌘⇧W as that key.
 
 ## What Wardlume Cannot Intercept (by design)
 
@@ -27,10 +33,8 @@ Two reliable ways to deactivate the ward, in priority order:
 - Power button press
 - Touch ID sensor (LocalAuthentication renders above intercept points via SecurityAgent)
 - Wardlume's own menu bar icon (whitelisted — see Whitelist Architecture)
-- Cmd+Shift+W (intentionally passed through as a blocked keystroke, not an escape)
 
-These are NOT bugs — they are guaranteed escape paths macOS protects, plus an intentional
-design decision to prevent accidental ward dismissal via window-management shortcuts.
+These are guaranteed escape paths macOS protects — not bugs.
 
 As of v1.1.0, system-defined media keys (brightness, volume, play/pause) and
 tablet/stylus events ARE included in the tap's event mask and consumed while the
@@ -77,8 +81,8 @@ reach the menu — but something in the interaction between the ward window's
 level (`.screenSaver`) and NSMenu's tracking runloop prevents the action
 selector from being invoked.
 
-**Workaround:** use the keyboard hotkeys (Cmd+Shift+W or Cmd+Shift+U).
-Both are fully functional.
+**Workaround:** use the keyboard hotkeys (⌘⇧L to toggle, ⌘⇧U / Touch ID to
+unlock), or the Activate/Deactivate button in **Settings → Overview**.
 
 This is a v1.x fix candidate — community contributions welcome.
 
@@ -141,9 +145,10 @@ strip pass through; everything else in the menu bar is consumed.
 - CGEventTap runs at `.cgSessionEventTap` location with `.headInsertEventTap`
   placement — earliest interception point that still respects OS-level
   shortcuts.
-- Cmd+Shift+W and Cmd+Shift+U are both handled inside the event tap callback
-  (not via NSEvent.addGlobalMonitorForEvents), because global NSEvent monitors
-  are implemented as listen-only CGEventTaps and cannot observe events our
+- The unlock combo (default ⌘⇧U) and the optional emergency-exit combo are both
+  handled inside the event tap callback (not via NSEvent.addGlobalMonitorForEvents),
+  because global NSEvent monitors are implemented as listen-only CGEventTaps and
+  cannot observe events our
   head-insert read-write tap consumes.
 - Touch ID is triggered only by explicit user intent (hotkey or menu click).
   Never on ward activation. Never on intrusion attempts. Intrusion attempts

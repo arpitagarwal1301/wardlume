@@ -2,6 +2,15 @@
 
 ## Shipped
 
+### v1.2.0 — Settings revamp, configurable hotkeys & emergency exit
+- [x] **Dark sidebar Settings window** — a System-Settings-style layout (Overview · Pack & assets · Shortcuts · Behavior) replacing the old single-Form preferences; forced dark with a teal theme
+- [x] **Configurable hotkeys** — remap the activate (global ⌘⇧L) and unlock (⌘⇧U) shortcuts with an in-app recorder; persisted, validated, and re-registered live
+- [x] **Emergency-exit panic key** — optional, OFF by default, no-auth hotkey (default ⌘⇧W) that instantly drops the ward; handled in the event tap so it works while warded
+- [x] **Wizard & Grumpy Old Man packs restored** — both character packs (and their bundled assets) are back alongside Silent Professional
+- [x] **Overview pane** — live ward status, a permission checklist with one-tap Enable, and Touch ID guidance
+- [x] **Reaction & ward fixes** — the reaction overlay and the Touch ID / password prompt now render above the ward (previously hidden behind `CGShieldingWindowLevel`); reactions are suppressed during authentication and for a short grace period after activation
+- [x] App icon, README banner, Privacy/Terms pages, and a Support (GitHub Sponsors) link
+
 ### v1.1.0 — Security hardening & pack simplification
 - [x] **Cmd+Shift+W keep-on-top watchdog** — detects the macOS window-management side-effect that pushed the ward to the back; re-raises the overlay up to 3× and falls back to the real macOS lock screen (`SACLockScreenImmediate`) if it can't recover
 - [x] **Menu-bar strip no longer pass-through** — clicks in the top strip now run the same Wardlume-owner check as the rest of the screen, so the Apple menu (Restart/Shut Down/Log Out), Control Center, and other apps' status items can't be used while warded (only our own status item passes)
