@@ -858,8 +858,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
     func menuDidClose(_ menu: NSMenu) {
         // Restore the security level. Handle the case where the ward was
-        // deactivated via Cmd+Shift+W while the menu was open (overlayWindow
-        // would be nil) — in that case, there's nothing to restore.
+        // deactivated via ⌘⇧U (Touch ID) or the ⌘⇧L toggle while the menu was
+        // open (overlayWindow would be nil) — in that case, there's nothing to restore.
         menuIsOpen = false
         overlayWindow?.level = .screenSaver
         for w in secondaryOverlayWindows { w.level = .screenSaver }
@@ -882,9 +882,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 #if DEBUG
     /// Installs the CGEventTap for 10 seconds without creating the shader overlay
     /// window. Use this to verify:
-    ///   1. Cmd+Shift+W fires immediately (escape hotkey works).
-    ///   2. The status-bar menu and its items remain clickable (whitelist works).
-    ///   3. Typing in other apps is blocked for the duration.
+    ///   1. The status-bar menu and its items remain clickable (whitelist works).
+    ///   2. Typing in other apps is blocked for the duration.
+    ///   3. Cmd+Shift+W is consumed like any other keystroke (it is NOT an escape
+    ///      hotkey — the tap uninstalls only on the 10 s timer).
     @objc func testLock() {
         guard overlayWindow == nil,
               InputLockManager.permissionsReady(),
@@ -895,11 +896,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         let dummy = NSWindow()
         lock.install(view: MetalOverlayView(frame: .zero), wardWindow: dummy)
 
-        lock.onEscapeHotkey = { [weak self] in
-            self?.inputLockManager?.uninstall()
-            print("Wardlume [DEBUG]: Cmd+Shift+W fired — test tap uninstalled.")
-        }
-
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
             guard let self, self.overlayWindow == nil else { return }
             self.inputLockManager?.uninstall()
@@ -907,7 +903,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         }
 
         print("Wardlume [DEBUG]: test tap active for 10 s. " +
-              "Try Cmd+Shift+W, the status-bar menu, and typing in other apps.")
+              "Verify Cmd+Shift+W is swallowed, the status-bar menu, and typing in other apps.")
     }
 
 #endif
