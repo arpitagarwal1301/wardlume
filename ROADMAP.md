@@ -78,6 +78,7 @@ Possible directions:
 - Community pack format (folder-based packs for sharing on GitHub)
 - Sensor fusion (Apple Watch proximity unlock)
 - Trap mode polish
+- PermissionPilot onboarding wizard — replace the first-launch alert with a permissions onboarding wizard built on the in-house [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot) Swift package (good-to-have; needs a sandbox-compatibility spike first, since the package targets non-sandboxed apps)
 
 Open for community input — see issues labeled `roadmap-discussion`.
 
