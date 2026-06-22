@@ -26,13 +26,15 @@
 1. Download `Wardlume-1.2.0.dmg` from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest).
 2. Open it and drag **Wardlume** into your Applications folder.
 
-Wardlume is source-available and isn't signed with a paid Apple certificate, so on first launch macOS warns it "can't verify" the app. Open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway**. If that button doesn't appear, run:
+Wardlume isn't notarized by Apple yet, so macOS Gatekeeper blocks the downloaded app and shows **"Wardlume is damaged and can't be opened"** (there's no "Open Anyway" button for this case). **It isn't actually damaged** — macOS just quarantines unsigned downloads. Clear the quarantine flag once, then open Wardlume normally:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Wardlume.app
 ```
 
-> Requires **macOS Tahoe 26+** on Apple Silicon.
+Prefer no Terminal? `brew install --cask wardlume` (once the tap is published) installs it without the Gatekeeper prompt.
+
+> Requires **macOS Tahoe 26+** on Apple Silicon. Source-available — you can read every line of what it does in this repo.
 
 ## Usage
 
