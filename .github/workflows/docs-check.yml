@@ -1,0 +1,19 @@
+name: Docs check
+
+# Keeps the markdown docs honest: version references, internal links, and CI
+# badges must all stay in sync with the app's source of truth. Runs the same
+# script as the local pre-push hook (scripts/check-docs.sh), so drift is
+# caught even when the hook isn't installed (fresh clone, another machine).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check documentation is in sync
+        run: ./scripts/check-docs.sh

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#
+# Wardlume pre-push hook — runs the documentation drift check before any push.
+#
+# Tracked hooks aren't active by default. Enable them once per clone:
+#
+#     git config core.hooksPath .githooks
+#
+# To bypass in an emergency:  git push --no-verify
+#
+exec "$(git rev-parse --show-toplevel)/scripts/check-docs.sh"

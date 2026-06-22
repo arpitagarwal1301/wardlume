@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/arpitagarwal1301/wardlume/actions"><img src="https://img.shields.io/github/actions/workflow/status/arpitagarwal1301/wardlume/build.yml?branch=main&style=flat-square" alt="Build"></a>
+  <a href="https://github.com/arpitagarwal1301/wardlume/actions/workflows/docs-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/arpitagarwal1301/wardlume/docs-check.yml?branch=main&style=flat-square&label=docs" alt="Docs check"></a>
   <img src="https://img.shields.io/badge/platform-macOS%20Tahoe%2026+-lightgrey.svg?style=flat-square" alt="Platform: macOS Tahoe 26+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue?style=flat-square" alt="License: PolyForm Noncommercial 1.0.0"></a>
 </p>

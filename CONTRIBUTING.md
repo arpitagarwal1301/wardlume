@@ -2,6 +2,16 @@
 
 Contributions are welcome. Before your contribution can be accepted, please read and agree to the contribution terms below.
 
+## Development setup
+
+After cloning, enable the project git hooks once:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+This installs a **pre-push hook** that runs [`scripts/check-docs.sh`](scripts/check-docs.sh) — a fast guard that the docs stay in sync: version references match `MARKETING_VERSION`, internal links resolve, and CI badges point at real workflows. The same script runs in CI (`.github/workflows/docs-check.yml`) on every push and PR, so drift is caught either way. Run it anytime with `./scripts/check-docs.sh`; bypass the hook in an emergency with `git push --no-verify`.
+
 ## Contribution License
 
 By submitting a contribution (a pull request, patch, or any code, documentation, or other material) to this project, you agree that:

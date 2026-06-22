@@ -2,6 +2,11 @@
 
 Run these **in order, every release.**
 
+> A pre-push hook + CI (`scripts/check-docs.sh`) verify that version references,
+> internal links, and badges stay in sync — but they don't do the work below for
+> you (especially the **Homebrew cask bump**). Enable the hook once per clone:
+> `git config core.hooksPath .githooks`.
+
 ## 1. Bump the version
 Update `MARKETING_VERSION` (and `CURRENT_PROJECT_VERSION`) in `Wardlume.xcodeproj/project.pbxproj`. The About panel and the Settings sidebar read `CFBundleShortVersionString`.
 
