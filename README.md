@@ -27,11 +27,10 @@
 
 ```sh
 brew tap arpitagarwal1301/tap
-brew trust arpitagarwal1301/tap   # one-time, required for third-party taps on Homebrew 6+
 brew install --cask wardlume
 ```
 
-Installs cleanly with no "damaged" prompt and no quarantine cleanup.
+Installs cleanly — no "damaged" prompt, no quarantine cleanup. (If your Homebrew is configured to require tap trust and refuses with an "untrusted tap" error, run `brew trust arpitagarwal1301/tap` once, then re-install.)
 
 ### Installer (`.pkg`)
 
