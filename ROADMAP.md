@@ -80,6 +80,7 @@ Possible directions:
 - Trap mode polish
 - PermissionPilot onboarding wizard — replace the first-launch alert with a permissions onboarding wizard built on the in-house [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot) Swift package (good-to-have; needs a sandbox-compatibility spike first, since the package targets non-sandboxed apps)
 - **Launch & promotion** — coordinated v1.2.0 push (demo video, Show HN, Product Hunt, r/macapps / r/ClaudeAI), ideally after Developer ID signing + notarization to reduce install friction
+- **Official Homebrew cask** — submit to `Homebrew/homebrew-cask` once Wardlume clears the notability bar (~75★ or ~30 forks/watchers) so users can `brew install --cask wardlume` without the tap; pairs best with notarization. Until then, the personal tap (`arpitagarwal1301/tap`) is the install path.
 
 Open for community input — see issues labeled `roadmap-discussion`.
 
