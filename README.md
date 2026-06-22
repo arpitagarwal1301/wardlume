@@ -23,16 +23,19 @@
 
 ## Install
 
-1. Download `Wardlume-1.2.0.dmg` from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest).
-2. Open it and drag **Wardlume** into your Applications folder.
+> Wardlume isn't notarized by Apple yet, so a freshly-downloaded copy needs one small one-time step. The **installer is the easiest path** — no Terminal.
 
-Wardlume isn't notarized by Apple yet, so macOS Gatekeeper blocks the downloaded app and shows **"Wardlume is damaged and can't be opened"** (there's no "Open Anyway" button for this case). **It isn't actually damaged** — macOS just quarantines unsigned downloads. Clear the quarantine flag once, then open Wardlume normally:
+**Recommended — the installer (`.pkg`):**
+1. Download **`Wardlume-1.2.0.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest).
+2. Open it. If macOS calls it "unidentified," **right-click the `.pkg` → Open** (or System Settings → Privacy & Security → **Open Anyway**) — once.
+3. Click through the installer. Wardlume lands in Applications and **opens normally afterward** — nothing else to do.
 
-```bash
-xattr -dr com.apple.quarantine /Applications/Wardlume.app
-```
-
-Prefer no Terminal? `brew install --cask wardlume` (once the tap is published) installs it without the Gatekeeper prompt.
+**Alternative — the disk image (`.dmg`):**
+1. Download `Wardlume-1.2.0.dmg`, open it, and drag **Wardlume** into Applications.
+2. macOS will say **"Wardlume is damaged"** — it isn't; unsigned downloads are just quarantined. Clear it once in Terminal:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Wardlume.app
+   ```
 
 > Requires **macOS Tahoe 26+** on Apple Silicon. Source-available — you can read every line of what it does in this repo.
 
