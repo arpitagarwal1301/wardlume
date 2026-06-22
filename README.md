@@ -21,23 +21,33 @@
 - 🖥️ **Multi-display aware** — secondary screens are covered while the ward is active.
 - 🔒 **Local-only** — no network, no analytics, no accounts. Nothing leaves your Mac.
 
-## Install
+> Wardlume isn't notarized by Apple yet. **Homebrew is the cleanest install** — it sidesteps the Gatekeeper "damaged" prompt entirely. The direct downloads work too, with one small one-time step.
 
-> Wardlume isn't notarized by Apple yet, so a freshly-downloaded copy needs one small one-time step. The **installer is the easiest path** — no Terminal.
+### Homebrew (recommended)
 
-**Recommended — the installer (`.pkg`):**
+```sh
+brew tap arpitagarwal1301/tap
+brew trust arpitagarwal1301/tap   # one-time, required for third-party taps on Homebrew 6+
+brew install --cask wardlume
+```
+
+Installs cleanly with no "damaged" prompt and no quarantine cleanup.
+
+### Installer (`.pkg`)
+
 1. Download **`Wardlume-1.2.0.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest).
-2. Open it. If macOS calls it "unidentified," **right-click the `.pkg` → Open** (or System Settings → Privacy & Security → **Open Anyway**) — once.
-3. Click through the installer. Wardlume lands in Applications and **opens normally afterward** — nothing else to do.
+2. Open it; if macOS calls it "unidentified," **right-click → Open** (or System Settings → Privacy & Security → **Open Anyway**) once.
+3. Click through the installer — Wardlume lands in Applications and opens normally.
 
-**Alternative — the disk image (`.dmg`):**
-1. Download `Wardlume-1.2.0.dmg`, open it, and drag **Wardlume** into Applications.
-2. macOS will say **"Wardlume is damaged"** — it isn't; unsigned downloads are just quarantined. Clear it once in Terminal:
+### Disk image (`.dmg`)
+
+1. Download `Wardlume-1.2.0.dmg` and drag **Wardlume** into Applications.
+2. macOS will say **"Wardlume is damaged"** — it isn't; unsigned downloads are just quarantined. Clear it once:
    ```bash
    xattr -dr com.apple.quarantine /Applications/Wardlume.app
    ```
 
-> Requires **macOS Tahoe 26+** on Apple Silicon. Source-available — you can read every line of what it does in this repo.
+> Requires **macOS Tahoe 26+** on Apple Silicon. Source-available — read every line of what it does in this repo.
 
 ## Usage
 

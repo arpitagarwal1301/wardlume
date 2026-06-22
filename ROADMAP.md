@@ -34,7 +34,7 @@
 - [x] All v0.2.x features stabilized and released as v1.0.0
 - [x] Initial DMG distribution via GitHub Releases
 - [x] Marks the product's first stable public release
-- [ ] Homebrew tap for `brew install --cask wardlume` (in progress)
+- [x] Homebrew tap — `brew install --cask arpitagarwal1301/tap/wardlume` (cask installs the notarization-free `.pkg`, sidestepping the Gatekeeper "damaged" prompt)
 
 ### v0.1.0 — Foundation (MIT-licensed open source release)
 - [x] Animated Metal glass shader overlay
