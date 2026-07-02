@@ -1,0 +1,15 @@
+{
+  "originHash" : "6aa856941072dcb90d9cbfad2b979b1d4cc369b06741d8af260715046c22db49",
+  "pins" : [
+    {
+      "identity" : "permissionpilot",
+      "kind" : "localSourceControl",
+      "location" : "/Users/arpit/arpitAgr/workspace/Developer/PermissionPilot",
+      "state" : {
+        "branch" : "fix/sandbox-safe-relaunch",
+        "revision" : "d1da7292a2af2da07b2cc12170f1378860821b65"
+      }
+    }
+  ],
+  "version" : 3
+}
