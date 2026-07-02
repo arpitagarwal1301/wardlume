@@ -66,6 +66,11 @@ final class DesktopCaptureManager: NSObject {
                 try await startCaptureTask(excludingWindow: overlayWindow)
             } catch {
                 print("Wardlume [DesktopCaptureManager]: startCapture failed — \(error)")
+                // Fail closed: an armed ward without live capture is a blank
+                // shield over a real input lock. Route through the same
+                // delegate path as a mid-session capture loss so the ward
+                // tears down and the user gets the alert.
+                captureDelegate?.desktopCaptureDidStop(self, error: error)
             }
         }
     }

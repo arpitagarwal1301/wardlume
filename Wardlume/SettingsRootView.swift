@@ -76,6 +76,14 @@ struct SettingsRootView: View {
         .preferredColorScheme(.dark)
         .tint(Theme.accentTeal)
         .frame(minWidth: 760, minHeight: 560)
+        // Programmatic pane deep-link (launch routing → Overview). Fires on
+        // every request, including window reuse; consumed then reset so the
+        // same pane can be requested again later.
+        .onReceive(wardState.$requestedSettingsPane) { pane in
+            guard let pane else { return }
+            selection = pane
+            wardState.requestedSettingsPane = nil
+        }
     }
 
     @ViewBuilder private var centerPane: some View {

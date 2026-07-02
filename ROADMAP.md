@@ -78,7 +78,7 @@ Plan: [docs/plans/v1.3.0-onboarding.md](docs/plans/v1.3.0-onboarding.md) · bran
 - [ ] **PermissionPilot onboarding wizard** — all three permissions (Screen Recording, Accessibility, Input Monitoring) in one guided first-run window built on the in-house [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot) package, replacing the quit-at-launch alert and the mid-activation permission alerts (sandbox-compatibility spike done — the package's detection APIs are the ones Wardlume already ships sandboxed)
 - [ ] **Smarter launch & reopen behavior** — opening Wardlume shows the onboarding when permissions are missing; when everything is already granted it opens Settings on the Overview pane instead of only adding the menu-bar icon
 - [ ] **Programmatic Settings pane selection** — deep-link to a specific pane (needed for the Overview launch behavior)
-- [ ] Upstream in PermissionPilot: sandbox-safe quit-and-relaunch + a v0.2.0 tag
+- [ ] Upstream in PermissionPilot: sandbox fixes released as **v0.2.0 first** (from the PermissionPilot repo), then Wardlume integrates the tagged release
 
 ### v1.1+ — TBD
 Possible directions:

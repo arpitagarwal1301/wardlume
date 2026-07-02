@@ -1,10 +1,12 @@
 import Cocoa
 import SwiftUI
+import Combine
 import MetalKit
 import CoreGraphics
 import ScreenCaptureKit
 import Carbon.HIToolbox
 import Darwin   // dlopen/dlsym for the macOS lock-screen fallback
+import PermissionPilot
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenuDelegate {
     var statusBarItem: NSStatusItem?
@@ -36,6 +38,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     var wardState: WardState!
     let wardPrefs = WardPrefs()
     let hotkeyManager = HotkeyManager()
+
+    /// v1.3.0: live TCC status engine (PermissionPilot). Re-checks on app
+    /// activation + a fallback poll; drives WardState's flags and decides the
+    /// launch routing (onboarding wizard vs Settings Overview). The wizard
+    /// requests permissions itself — AppDelegate no longer shows permission
+    /// alerts or terminates over a missing grant.
+    private(set) var permissionManager: PermissionManager!
+    /// Weak: the presenter retains itself while visible and releases on Finish
+    /// or window close, so this goes nil exactly when the wizard is gone.
+    private weak var onboardingPresenter: OnboardingPresenter?
+    private var permissionSync: AnyCancellable?
 
     /// Phase 2.5c: owns the preferences window lifecycle. Created on first
     /// openPreferences() call and reused for subsequent opens.
@@ -108,36 +121,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("WARDLUME: applicationDidFinishLaunching called!")
 
-        // --- Screen Recording permission gate --------------------------------
-        if !CGPreflightScreenCaptureAccess() {
-            CGRequestScreenCaptureAccess()
-
-            let alert = NSAlert()
-            alert.messageText     = "Screen Recording Access Required"
-            alert.informativeText = """
-                Wardlume renders live desktop refraction and needs Screen \
-                Recording permission.
-
-                If a system dialog appeared, click Allow. Otherwise:
-                System Settings → Privacy & Security → Screen Recording → \
-                enable Wardlume.
-
-                Relaunch Wardlume after granting access.
-                """
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "Open System Settings")
-            alert.addButton(withTitle: "Quit")
-
-            let response = alert.runModal()
-            if response == .alertFirstButtonReturn {
-                let url = URL(string:
-                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
-                NSWorkspace.shared.open(url)
-            }
-            NSApp.terminate(nil)
-            return
-        }
-
         // --- Status bar ------------------------------------------------------
         statusBarItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
@@ -163,6 +146,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
                                          keyEquivalent: ",")
         preferencesItem.target = self
         menu.addItem(preferencesItem)
+
+        let setupItem = NSMenuItem(title: "Permissions Setup...",
+                                   action: #selector(openOnboarding),
+                                   keyEquivalent: "")
+        setupItem.target = self
+        menu.addItem(setupItem)
 
         unlockMenuItem = NSMenuItem(title: "Unlock with Touch ID (\(hotkeyManager.unlock.displayString))...",
                                     action: #selector(unlockWithBiometrics),
@@ -243,6 +232,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         wardState.onToggle = { [weak self] in self?.toggleWard() }
         wardState.recheckPermissions()
 
+        // v1.3.0: PermissionPilot manager for the three ward permissions. Its
+        // status changes (poll + app-activation re-checks) drive WardState's
+        // flags, so the Settings checklist live-updates without waiting for a
+        // window-key event. Detection stays on WardState's own preflights —
+        // the manager is the refresh *trigger*, not a second source of truth.
+        permissionManager = PermissionManager(
+            required: [.screenRecording, .accessibility, .inputMonitoring]
+        )
+        permissionSync = permissionManager.$statuses
+            .dropFirst()
+            .sink { [weak self] _ in self?.wardState?.recheckPermissions() }
+
         // Crash recovery: if a previous ward session crashed while gestures were
         // disabled, GestureBlocker restores them here before anything else runs.
         GestureBlocker.shared.recoverIfNeeded()
@@ -260,6 +261,90 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         // is gone, tear down rather than present a fake lock.
         wsCenter.addObserver(self, selector: #selector(systemDidWake),
                              name: NSWorkspace.didWakeNotification, object: nil)
+
+        // v1.3.0: opening a menu-bar agent used to do nothing visible. Route to
+        // the right first screen instead: permissions missing → onboarding
+        // wizard; everything granted → Settings on the Overview pane.
+        routeLaunchUI()
+    }
+
+    // -------------------------------------------------------------------------
+    // MARK: — Launch / reopen routing (v1.3.0)
+    // -------------------------------------------------------------------------
+
+    /// One rule for both launch and Finder-reopen: the wizard when any ward
+    /// permission is missing, the Settings Overview when all are granted.
+    private func routeLaunchUI() {
+        // Never summon windows while the ward is armed: the input tap
+        // whitelists clicks on every non-overlay Wardlume window, so a
+        // Settings window opened under the shield (e.g. a scripted
+        // `open -a Wardlume` reopen) would expose an unauthenticated
+        // Deactivate control.
+        guard overlayWindow == nil else { return }
+
+        if permissionManager.allRequiredGranted {
+            showPreferences(pane: .overview)
+        } else {
+            presentOnboarding()
+        }
+    }
+
+    /// Double-clicking Wardlume in /Applications while it's already running
+    /// lands here (LSUIElement apps have no Dock icon). Same routing as launch.
+    func applicationShouldHandleReopen(_ sender: NSApplication,
+                                       hasVisibleWindows flag: Bool) -> Bool {
+        routeLaunchUI()
+        return false
+    }
+
+    /// Presents the PermissionPilot onboarding wizard (or fronts it if already
+    /// up). The wizard owns requesting: system prompts where possible, System
+    /// Settings deep-links otherwise, live re-check on return, and a
+    /// Quit & Reopen banner for grants that need a relaunch (Input Monitoring;
+    /// Screen Recording's process-cached preflight).
+    @objc func openOnboarding() {
+        presentOnboarding()
+    }
+
+    private func presentOnboarding() {
+        // Re-front (deminiaturize + order forward) an existing wizard —
+        // NSApp.activate alone would leave a minimized or buried window
+        // invisible and the trigger looking dead.
+        if let presenter = onboardingPresenter {
+            presenter.front()
+            return
+        }
+
+        var config = OnboardingConfiguration(appName: "Wardlume")
+        config.appIcon = Image(nsImage: NSApp.applicationIconImage)
+        config.welcomeSubtitle = """
+            Wardlume locks your keyboard, mouse, and trackpad behind a glass \
+            shield while your AI agents keep working. Three permissions make \
+            that possible — grant them once and you're set.
+            """
+        config.doneSubtitle = "Press \(hotkeyManager.activate.displayString) to cast the ward."
+        config.tint = Theme.accentTeal
+        config.colorScheme = .dark   // match the app's forced-dark identity
+        config.reasons = [
+            .screenRecording: "Renders your live desktop behind the glass shield. Nothing is saved or transmitted.",
+            .accessibility:   "Locks the keyboard, mouse, and trackpad while the ward is active.",
+            .inputMonitoring: "Detects intrusion attempts so the ward can react.",
+        ]
+
+        onboardingPresenter = PermissionPilot.presentOnboarding(
+            manager: permissionManager,
+            configuration: config
+        ) { [weak self] in
+            guard let self else { return }
+            self.onboardingPresenter = nil
+            self.wardState?.recheckPermissions()
+            // Setup finished with everything granted → land on the Overview
+            // checklist so the user sees the all-green state.
+            if self.permissionManager.allRequiredGranted {
+                self.showPreferences(pane: .overview)
+            }
+        }
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     // -------------------------------------------------------------------------
@@ -356,43 +441,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
 
     /// Brings the ward up: permission gate → window(s) → capture → input lock.
     private func activateWard() {
-        // --- Phase 2a: check Accessibility + Input Monitoring before locking.
-        if !InputLockManager.permissionsReady() {
-            InputLockManager.requestPermissions()
-
-            let alert = NSAlert()
-            alert.messageText     = "Accessibility & Input Monitoring Required"
-            alert.informativeText = """
-                Wardlume needs Accessibility and Input Monitoring \
-                permission to lock keyboard and mouse while the ward \
-                is active.
-
-                If a system dialog appeared, click Allow. Otherwise \
-                open System Settings:
-                • Privacy & Security → Accessibility → enable Wardlume
-                • Privacy & Security → Input Monitoring → enable Wardlume
-
-                Relaunch Wardlume after granting both permissions.
-                """
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "Open Privacy Settings")
-            alert.addButton(withTitle: "Cancel")
-
-            if alert.runModal() == .alertFirstButtonReturn {
-                // Open the pane for whichever permission is actually missing.
-                // If both are missing, open Accessibility first — after granting and
-                // relaunching, the next activation attempt routes to Input Monitoring.
-                let pane: String
-                if !InputLockManager.accessibilityGranted() {
-                    pane = "Privacy_Accessibility"
-                } else {
-                    pane = "Privacy_ListenEvent"   // Input Monitoring pane
-                }
-                if let url = URL(string:
-                    "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
-                    NSWorkspace.shared.open(url)
-                }
-            }
+        // Fail-closed permission gate. Screen Recording is checked here too now
+        // that the launch no longer terminates over it. A missing grant opens
+        // the onboarding wizard (which requests, deep-links, and handles the
+        // relaunch dance) instead of a modal alert.
+        if !InputLockManager.permissionsReady() || !CGPreflightScreenCaptureAccess() {
+            permissionManager.refresh()
+            presentOnboarding()
             return
         }
 
@@ -897,8 +952,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
     // -------------------------------------------------------------------------
 
     @objc func openPreferences() {
+        showPreferences(pane: nil)
+    }
+
+    /// Opens (or fronts) the settings window, optionally landing on a specific
+    /// pane. The pane request travels through WardState so SwiftUI owns the
+    /// selection — works for both a fresh window and a reused one.
+    func showPreferences(pane: SettingsPane?) {
         // Refresh live permission flags whenever the window is summoned.
         wardState?.recheckPermissions()
+        if let pane { wardState?.requestedSettingsPane = pane }
 
         if let window = preferencesWindow {
             window.makeKeyAndOrderFront(nil)
@@ -949,6 +1012,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSMenu
         case #selector(toggleWard),
              #selector(unlockWithBiometrics),
              #selector(openPreferences),
+             #selector(openOnboarding),
              #selector(quitApp):
             return true
         #if DEBUG

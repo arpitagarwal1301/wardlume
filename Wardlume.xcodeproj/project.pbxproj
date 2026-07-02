@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		2B79C7302FC62B6400267C1C /* PermissionPilot in Frameworks */ = {isa = PBXBuildFile; productRef = 2B79C7322FC62B6400267C1C /* PermissionPilot */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		2B79C71F2FC62B6100267C1C /* Wardlume.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Wardlume.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -26,6 +30,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2B79C7302FC62B6400267C1C /* PermissionPilot in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -68,6 +73,7 @@
 			);
 			name = Wardlume;
 			packageProductDependencies = (
+				2B79C7322FC62B6400267C1C /* PermissionPilot */,
 			);
 			productName = Wardlume;
 			productReference = 2B79C71F2FC62B6100267C1C /* Wardlume.app */;
@@ -97,6 +103,9 @@
 			);
 			mainGroup = 2B79C7162FC62B6100267C1C;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				2B79C7312FC62B6400267C1C /* XCRemoteSwiftPackageReference "PermissionPilot" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2B79C7202FC62B6100267C1C /* Products */;
 			projectDirPath = "";
@@ -344,6 +353,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		2B79C7312FC62B6400267C1C /* XCRemoteSwiftPackageReference "PermissionPilot" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/arpitagarwal1301/PermissionPilot.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		2B79C7322FC62B6400267C1C /* PermissionPilot */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2B79C7312FC62B6400267C1C /* XCRemoteSwiftPackageReference "PermissionPilot" */;
+			productName = PermissionPilot;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 2B79C7172FC62B6100267C1C /* Project object */;
 }

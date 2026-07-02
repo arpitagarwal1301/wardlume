@@ -31,6 +31,11 @@ final class WardState: ObservableObject {
     /// Set by AppDelegate to forward toggle() → toggleWard(). [weak self] there.
     var onToggle: (() -> Void)?
 
+    /// v1.3.0: programmatic pane deep-link (e.g. launch routing lands on
+    /// Overview). Written by AppDelegate.showPreferences(pane:); consumed and
+    /// reset by SettingsRootView. nil means "no request pending".
+    @Published var requestedSettingsPane: SettingsPane?
+
     var allPermissionsReady: Bool {
         screenRecordingGranted && accessibilityGranted && inputMonitoringGranted
     }

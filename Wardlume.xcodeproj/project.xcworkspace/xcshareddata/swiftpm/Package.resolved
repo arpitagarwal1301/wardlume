@@ -1,0 +1,15 @@
+{
+  "originHash" : "64701e9cf753e8f4919d15933f0eb20ebb1d17ec21bc06f5938f594b554779f5",
+  "pins" : [
+    {
+      "identity" : "permissionpilot",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/arpitagarwal1301/PermissionPilot.git",
+      "state" : {
+        "revision" : "f5ae76ff1e474f35d064815dad56dd7f77390419",
+        "version" : "0.2.0"
+      }
+    }
+  ],
+  "version" : 3
+}
