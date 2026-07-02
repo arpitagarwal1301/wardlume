@@ -357,10 +357,10 @@
 /* Begin XCRemoteSwiftPackageReference section */
 		2B79C7312FC62B6400267C1C /* XCRemoteSwiftPackageReference "PermissionPilot" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "file:///Users/arpit/arpitAgr/workspace/Developer/PermissionPilot";
+			repositoryURL = "https://github.com/arpitagarwal1301/PermissionPilot.git";
 			requirement = {
-				branch = "fix/sandbox-safe-relaunch";
-				kind = branch;
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.2.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
