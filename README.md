@@ -15,6 +15,7 @@
 ## Features
 
 - 🛡️ **Glass-shield ward** — an animated Metal overlay over your live desktop. The screen stays readable while input is hard-locked at the macOS event-tap level.
+- 🧭 **Guided setup** — a first-launch wizard walks you through all three permissions (request → grant → verified live), powered by [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot), our open-source permissions-onboarding SDK for Mac apps.
 - 👆 **Touch ID unlock** — rest your finger or press your unlock shortcut; falls back to your password.
 - ⌨️ **Configurable hotkeys** — remap the activate and unlock shortcuts, with an optional no-auth emergency-exit key.
 - 🎭 **Bait-and-switch reactions** — a wrong touch springs a reaction image and sound. Ships with **Silent Professional**, **Wizard**, and **Grumpy Old Man** packs, or drop in your own cover image, reaction image, and audio.
@@ -35,13 +36,13 @@ Installs cleanly — no "damaged" prompt, no quarantine cleanup. Homebrew 6+ req
 
 ### Installer (`.pkg`)
 
-1. Download **`Wardlume-1.2.0.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest).
+1. Download **`Wardlume-1.3.0.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest).
 2. Open it; if macOS calls it "unidentified," **right-click → Open** (or System Settings → Privacy & Security → **Open Anyway**) once.
 3. Click through the installer — Wardlume lands in Applications and opens normally.
 
 ### Disk image (`.dmg`)
 
-1. Download `Wardlume-1.2.0.dmg` and drag **Wardlume** into Applications.
+1. Download `Wardlume-1.3.0.dmg` and drag **Wardlume** into Applications.
 2. macOS will say **"Wardlume is damaged"** — it isn't; unsigned downloads are just quarantined. Clear it once:
    ```bash
    xattr -dr com.apple.quarantine /Applications/Wardlume.app
@@ -60,7 +61,7 @@ Want a guaranteed way out? Enable the optional **emergency-exit** shortcut in **
 
 ## Permissions
 
-On first activation Wardlume requests three permissions, each used only while the ward is active:
+On first launch a **guided setup** (built on [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot)) walks you through the three permissions Wardlume needs, each used only while the ward is active:
 
 | Permission | Why |
 |---|---|
@@ -68,8 +69,7 @@ On first activation Wardlume requests three permissions, each used only while th
 | **Accessibility** | Lock the keyboard, mouse, and trackpad |
 | **Input Monitoring** | Detect intrusion attempts |
 
-> [!IMPORTANT]
-> After granting these in **System Settings → Privacy & Security**, **quit and relaunch** Wardlume for them to take effect.
+The wizard requests each one, deep-links to the exact System Settings pane, re-checks live as you grant, and offers a one-click **Quit & Reopen** for the grants macOS only applies after a relaunch. Re-run it anytime from the menu bar → **Permissions Setup…** — and when everything is already granted, opening Wardlume lands on **Settings → Overview** instead.
 
 ## Build from source
 
@@ -86,6 +86,7 @@ Select the **Wardlume** scheme and press **⌘R**. Built with Swift, SwiftUI, Ap
 ## More
 
 - [Safety notes](SAFETY_NOTES.md) — escape hatches and security boundaries
+- [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot) — the zero-dependency SwiftUI permissions/onboarding SDK behind Wardlume's setup wizard (also ours, MIT)
 - [Privacy](PRIVACY.md) · [Terms](TERMS.md)
 - [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 - [License](LICENSE) — PolyForm Noncommercial 1.0.0 (noncommercial use; commercial use reserved)

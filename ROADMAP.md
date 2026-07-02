@@ -2,6 +2,14 @@
 
 ## Shipped
 
+### v1.3.0 — Seamless permissions & first-launch onboarding
+Plan: [docs/plans/v1.3.0-onboarding.md](docs/plans/v1.3.0-onboarding.md) · merged via PR #7
+- [x] **PermissionPilot onboarding wizard** — all three permissions (Screen Recording, Accessibility, Input Monitoring) in one guided first-run window built on the in-house [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot) SDK, replacing the quit-at-launch alert and the mid-activation permission alerts
+- [x] **Smarter launch & reopen behavior** — opening Wardlume shows the onboarding when permissions are missing; when everything is granted it opens Settings on the Overview pane instead of only adding the menu-bar icon; the app never self-terminates at launch anymore
+- [x] **Programmatic Settings pane selection** + a "Permissions Setup…" menu item to re-run the wizard
+- [x] **Fail-closed hardening** — ward activation now gates on all three permissions; capture-start failure tears the ward down; launch/reopen routing suppressed while warded
+- [x] **Upstream: PermissionPilot v0.2.0** — Wardlume's integration surfaced and fixed three real bugs in the SDK (sandbox-safe quit-and-relaunch, entitlement-based sandbox detection, Accessibility deep-link fallback), released as [v0.2.0](https://github.com/arpitagarwal1301/PermissionPilot/releases/tag/v0.2.0)
+
 ### v1.2.0 — Settings revamp, configurable hotkeys & emergency exit
 - [x] **Dark sidebar Settings window** — a System-Settings-style layout (Overview · Pack & assets · Shortcuts · Behavior) replacing the old single-Form preferences; forced dark with a teal theme
 - [x] **Configurable hotkeys** — remap the activate (global ⌘⇧L) and unlock (⌘⇧U) shortcuts with an in-app recorder; persisted, validated, and re-registered live
@@ -72,13 +80,6 @@
 - [x] silentProfessional now has a distinct visual identity (minimal shader + corner indicator) separate from character-driven packs
 
 ## In Progress
-
-### v1.3.0 — Seamless permissions & first-launch onboarding
-Plan: [docs/plans/v1.3.0-onboarding.md](docs/plans/v1.3.0-onboarding.md) · branch `feature/v1.3.0-onboarding`
-- [ ] **PermissionPilot onboarding wizard** — all three permissions (Screen Recording, Accessibility, Input Monitoring) in one guided first-run window built on the in-house [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot) package, replacing the quit-at-launch alert and the mid-activation permission alerts (sandbox-compatibility spike done — the package's detection APIs are the ones Wardlume already ships sandboxed)
-- [ ] **Smarter launch & reopen behavior** — opening Wardlume shows the onboarding when permissions are missing; when everything is already granted it opens Settings on the Overview pane instead of only adding the menu-bar icon
-- [ ] **Programmatic Settings pane selection** — deep-link to a specific pane (needed for the Overview launch behavior)
-- [ ] Upstream in PermissionPilot: sandbox fixes released as **v0.2.0 first** (from the PermissionPilot repo), then Wardlume integrates the tagged release
 
 ### v1.1+ — TBD
 Possible directions:
