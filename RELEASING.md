@@ -26,7 +26,10 @@ Build Release, then create both distributables, named `Wardlume-X.Y.Z`:
 gh release create vX.Y.Z Wardlume-X.Y.Z.dmg Wardlume-X.Y.Z.pkg \
   --target main --title "vX.Y.Z — …" --notes-file notes.md
 ```
-Install order in the notes: **Homebrew → .pkg → .dmg**.
+Install order in the notes: **Homebrew → .pkg → .dmg**. The Homebrew snippet is
+three steps — `brew tap` → `brew trust` → `brew install --cask wardlume` — because
+Homebrew 6+ requires trusting a third-party tap by default before it will load
+casks from it.
 
 ## 4. Bump the Homebrew tap cask — EVERY release
 In [`arpitagarwal1301/homebrew-tap`](https://github.com/arpitagarwal1301/homebrew-tap), edit

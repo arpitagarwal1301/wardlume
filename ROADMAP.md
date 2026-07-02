@@ -73,12 +73,18 @@
 
 ## In Progress
 
+### v1.3.0 — Seamless permissions & first-launch onboarding
+Plan: [docs/plans/v1.3.0-onboarding.md](docs/plans/v1.3.0-onboarding.md) · branch `feature/v1.3.0-onboarding`
+- [ ] **PermissionPilot onboarding wizard** — all three permissions (Screen Recording, Accessibility, Input Monitoring) in one guided first-run window built on the in-house [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot) package, replacing the quit-at-launch alert and the mid-activation permission alerts (sandbox-compatibility spike done — the package's detection APIs are the ones Wardlume already ships sandboxed)
+- [ ] **Smarter launch & reopen behavior** — opening Wardlume shows the onboarding when permissions are missing; when everything is already granted it opens Settings on the Overview pane instead of only adding the menu-bar icon
+- [ ] **Programmatic Settings pane selection** — deep-link to a specific pane (needed for the Overview launch behavior)
+- [ ] Upstream in PermissionPilot: sandbox-safe quit-and-relaunch + a v0.2.0 tag
+
 ### v1.1+ — TBD
 Possible directions:
 - Community pack format (folder-based packs for sharing on GitHub)
 - Sensor fusion (Apple Watch proximity unlock)
 - Trap mode polish
-- PermissionPilot onboarding wizard — replace the first-launch alert with a permissions onboarding wizard built on the in-house [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot) Swift package (good-to-have; needs a sandbox-compatibility spike first, since the package targets non-sandboxed apps)
 - **Launch & promotion** — coordinated v1.2.0 push (demo video, Show HN, Product Hunt, r/macapps / r/ClaudeAI), ideally after Developer ID signing + notarization to reduce install friction
 - **Official Homebrew cask** — submit to `Homebrew/homebrew-cask` once Wardlume clears the notability bar (~75★ or ~30 forks/watchers) so users can `brew install --cask wardlume` without the tap; pairs best with notarization. Until then, the personal tap (`arpitagarwal1301/tap`) is the install path.
 
