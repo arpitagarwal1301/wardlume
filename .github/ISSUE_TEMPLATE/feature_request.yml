@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest an idea for Wardlume
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like Wardlume to do?
+      description: Describe the situation, for example "when I step away from my agent, I wish…"
+    validations:
+      required: true
+  - type: textarea
+    id: ideas
+    attributes:
+      label: Any ideas on how it could work?
+  - type: dropdown
+    id: importance
+    attributes:
+      label: How much would this help you?
+      options:
+        - Nice to have
+        - I'd use it often
+        - It's blocking me from using Wardlume

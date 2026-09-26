@@ -1,0 +1,59 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Wardlume! Stuck behind the ward right now? Press **⌘⌥Esc** and force-quit Wardlume, then file this report.
+  - type: input
+    id: wardlume-version
+    attributes:
+      label: Wardlume version
+      description: Settings sidebar (bottom-left), or the About panel.
+      placeholder: "1.7.0"
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      placeholder: "macOS Tahoe 26.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - Homebrew
+        - .pkg installer
+        - .dmg
+    validations:
+      required: true
+  - type: checkboxes
+    id: setup
+    attributes:
+      label: Your setup (tick any that apply)
+      options:
+        - label: More than one monitor
+        - label: Apple Watch unlock turned on
+        - label: Auto-ward when idle turned on
+        - label: Custom unlock or activate shortcut
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+      placeholder: |
+        1. Pressed ⌘⇧L
+        2. …
+        Expected: …
+        Actual: …
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or anything else
+      description: Optional. Please don't include passwords or anything private.
