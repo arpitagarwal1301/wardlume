@@ -2,6 +2,13 @@
 
 Downloads for every version are on the [Releases](https://github.com/arpitagarwal1301/wardlume-screen-lock/releases) page. Update with `brew upgrade --cask wardlume`.
 
+## v1.7.2 — Cleaner Settings and menu · 2026-09-27
+- 🧭 **Settings reorganized:** Overview · Lock & unlock · Automation · Displays & gestures · Intruder reactions · Advanced.
+- 🔢 **"How Wardlume works"** on Overview: Lock → Step away → Unlock, with your own shortcuts.
+- ✏️ **Clearer shortcut editing:** edit and reset buttons with tooltips.
+- ⚠️ Emergency exit and **Reset all** now live in **Advanced**.
+- 📋 **Menu bar:** shows your own activate shortcut, has a quick Auto-ward toggle and **Check for Updates…**, and only shows permissions setup when something's missing.
+
 ## v1.7.1 — New download home · 2026-09-27
 - Wardlume now lives at **[wardlume-screen-lock](https://github.com/arpitagarwal1301/wardlume-screen-lock)**. **Check updates**, **Privacy**, and **Terms** in the app point here.
 - No other changes. Your settings and permissions carry over.

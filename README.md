@@ -17,12 +17,12 @@
 - 🛡️ **Glass-shield ward** — an animated Metal overlay over your live desktop. The screen stays readable while input is hard-locked at the macOS event-tap level.
 - 🧭 **Guided setup** — a first-launch wizard walks you through all three permissions (request → grant → verified live), powered by [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot), our open-source permissions-onboarding SDK for Mac apps.
 - 👆 **Touch ID unlock** — rest your finger or press your unlock shortcut; falls back to your password.
-- ⌚ **Apple Watch unlock** — tap the Mac, then double-press your watch's side button. Built-in setup steps and a "Send test to watch" check are in **Settings → Overview**.
+- ⌚ **Apple Watch unlock** — tap the Mac, then double-press your watch's side button. Built-in setup steps and a "Send test to watch" check are in **Settings → Lock & unlock**.
 - ⌨️ **Configurable hotkeys** — remap the activate and unlock shortcuts, with an optional no-auth emergency-exit key.
 - 🎭 **Bait-and-switch reactions** — a wrong touch springs a reaction image and sound. Ships with **Silent Professional**, **Wizard**, and **Grumpy Old Man** packs, or drop in your own cover image, reaction image, and audio.
-- ☕ **Keeps your Mac awake** — while the ward is up, the display and system won't idle-sleep, so the ward holds and your agents keep running. On by default; toggle it in **Settings → Behavior**.
+- ☕ **Keeps your Mac awake** — while the ward is up, the display and system won't idle-sleep, so the ward holds and your agents keep running. On by default; toggle it in **Settings → Automation**.
 - ⏱️ **Auto-ward when idle** — optionally casts the ward after 1–15 minutes without keyboard or mouse input, with a 10-second countdown you cancel by moving the mouse. Off by default.
-- 🚀 **Launch at login** — starts quietly in the menu bar when you log in, so it's always ready. On by default; toggle it in **Settings → Behavior**.
+- 🚀 **Launch at login** — starts quietly in the menu bar when you log in, so it's always ready. On by default; toggle it in **Settings → Automation**.
 - 🖥️ **Multi-display aware** — the ward appears on the display you activate it from. Other monitors stay visible but locked (or blacked out, your choice), and plugging or unplugging a monitor never unlocks it.
 - 🔒 **Local-only** — no network, no analytics, no accounts. Nothing leaves your Mac.
 
@@ -40,13 +40,13 @@ Installs cleanly — no "damaged" prompt, no quarantine cleanup. Homebrew 6+ req
 
 ### Installer (`.pkg`)
 
-1. Download **`Wardlume-1.7.1.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume-screen-lock/releases/latest).
+1. Download **`Wardlume-1.7.2.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume-screen-lock/releases/latest).
 2. Open it; if macOS calls it "unidentified," **right-click → Open** (or System Settings → Privacy & Security → **Open Anyway**) once.
 3. Click through the installer — Wardlume lands in Applications and opens normally.
 
 ### Disk image (`.dmg`)
 
-1. Download `Wardlume-1.7.1.dmg` and drag **Wardlume** into Applications.
+1. Download `Wardlume-1.7.2.dmg` and drag **Wardlume** into Applications.
 2. macOS will say **"Wardlume is damaged"** — it isn't; unsigned downloads are just quarantined. Clear it once:
    ```bash
    xattr -dr com.apple.quarantine /Applications/Wardlume.app
@@ -61,7 +61,7 @@ Installs cleanly — no "damaged" prompt, no quarantine cleanup. Homebrew 6+ req
 3. Walk away. The screen stays visible under the glass shield; keyboard, mouse, and trackpad are locked — and your Mac stays awake, so the ward holds and your agents keep running.
 4. Return and **rest your finger on Touch ID** — or press **⌘⇧U** — to unlock.
 
-Want a guaranteed way out? Enable the optional **emergency-exit** shortcut in **Settings → Shortcuts** (off by default).
+Want a guaranteed way out? Enable the optional **emergency-exit** shortcut in **Settings → Advanced** (off by default).
 
 ## Permissions
 
@@ -77,14 +77,14 @@ Once Screen Recording is granted, macOS may also ask one time whether Wardlume c
 
 Keeping your Mac awake needs **no permission** — it uses a standard power assertion (the same mechanism as `caffeinate`), held only while the ward is active.
 
-The wizard requests each one, deep-links to the exact System Settings pane, re-checks live as you grant, and offers a one-click **Quit & Reopen** for the grants macOS only applies after a relaunch. Re-run it anytime from the menu bar → **Permissions Setup…** — and when everything is already granted, opening Wardlume lands on **Settings → Overview** instead.
+The wizard requests each one, deep-links to the exact System Settings pane, re-checks live as you grant, and offers a one-click **Quit & Reopen** for the grants macOS only applies after a relaunch. If a permission goes missing later, the menu bar shows **Finish permissions setup…** to reopen it — and when everything is granted, opening Wardlume lands on **Settings → Overview** instead.
 
 ## FAQ
 
 <details>
 <summary><b>Is my screen hidden while warded?</b></summary>
 
-No, and that's the point. The screen stays visible so anyone nearby can watch your agent work. Only **input** is locked. If you'd rather other monitors go dark, choose **Settings → Behavior → Other monitors → Black out**.
+No, and that's the point. The screen stays visible so anyone nearby can watch your agent work. Only **input** is locked. If you'd rather other monitors go dark, choose **Settings → Displays & gestures → Other monitors → Black out**.
 </details>
 
 <details>
@@ -102,13 +102,13 @@ Yes. Wardlume doesn't care what's running. It locks input for the whole Mac whil
 <details>
 <summary><b>Apple Watch unlock isn't working</b></summary>
 
-Open **Settings → Overview → Unlock with Apple Watch** and follow the setup steps. In short: your watch has to be signed in to the same Apple Account, have a passcode, be on your wrist and unlocked, and be enabled in **System Settings → Touch ID & Password**. Then press **Send test to watch**.
+Open **Settings → Lock & unlock → Unlock with Apple Watch** and follow the setup steps. In short: your watch has to be signed in to the same Apple Account, have a passcode, be on your wrist and unlocked, and be enabled in **System Settings → Touch ID & Password**. Then press **Send test to watch**.
 </details>
 
 <details>
 <summary><b>How do I uninstall?</b></summary>
 
-First turn off **Settings → Behavior → Launch at login** (or remove Wardlume in System Settings → General → Login Items). Then run `brew uninstall --cask wardlume`, or quit Wardlume and drag it from Applications to the Trash.
+First turn off **Settings → Automation → Launch at login** (or remove Wardlume in System Settings → General → Login Items). Then run `brew uninstall --cask wardlume`, or quit Wardlume and drag it from Applications to the Trash.
 </details>
 
 <details>

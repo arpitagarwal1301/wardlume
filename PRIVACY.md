@@ -12,7 +12,7 @@ Wardlume is a local macOS menu-bar app. It does not collect, store, or transmit 
 | **Accessibility** | Installs the input event tap that locks the keyboard, mouse, and trackpad while the ward is active. | Stays on-device. Input events are blocked, not logged or sent anywhere. |
 | **Input Monitoring** | Detects intrusion attempts so the ward can show a reaction. | Stays on-device. Used only to trigger the on-screen reaction. |
 | **Idle time** (no permission required) | When *Auto-ward when idle* is on, reads how long it has been since the last keyboard or mouse input (a single number of seconds) and whether another app is keeping the display awake. | Stays on-device. Used only to decide when to show the auto-ward countdown; never logged or sent anywhere. |
-| **Keep awake** (no permission required) | Holds a power assertion so the display and system don't idle-sleep while the ward is active. Toggle in Settings → Behavior. | Nothing is collected. The assertion is a local request to macOS, released when the ward ends. |
+| **Keep awake** (no permission required) | Holds a power assertion so the display and system don't idle-sleep while the ward is active. Toggle in Settings → Automation. | Nothing is collected. The assertion is a local request to macOS, released when the ward ends. |
 
 ## Your custom assets
 
