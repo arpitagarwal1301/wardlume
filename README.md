@@ -12,10 +12,6 @@
 
 **Wardlume** is a macOS menu-bar app for **botsitting** — leaving your AI coding agents (Claude Code, Cursor, …) running while you step away. It locks the keyboard, mouse, and trackpad behind an animated glass shield, so the screen stays fully visible — anyone in the room can watch the agent work — but nothing can be touched. Unlock instantly with Touch ID.
 
-<p align="center">
-  <img src=".github/assets/wardlume-demo.gif" alt="Wardlume demo: the glass ward over a live desktop" width="720">
-</p>
-
 ## Features
 
 - 🛡️ **Glass-shield ward** — an animated Metal overlay over your live desktop. The screen stays readable while input is hard-locked at the macOS event-tap level.
