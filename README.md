@@ -10,6 +10,8 @@
 
 > Cast a watching ward over your Mac. See your AI agents work. Intruders can't.
 
+**🌐 [wardlume.github.io](https://wardlume.github.io)**: [Download](https://wardlume.github.io/download) · [Docs](https://wardlume.github.io/docs) · [Support](https://wardlume.github.io/support)
+
 **Wardlume** is a macOS menu-bar app for **botsitting** — leaving your AI coding agents (Claude Code, Cursor, …) running while you step away. It locks the keyboard, mouse, and trackpad behind an animated glass shield, so the screen stays fully visible — anyone in the room can watch the agent work — but nothing can be touched. Unlock instantly with Touch ID.
 
 ## Features
@@ -119,6 +121,7 @@ Yes, for any **noncommercial** use (personal, study, hobby, nonprofit). Commerci
 
 ## Support
 
+- 📘 **Docs & troubleshooting:** [wardlume.github.io/support](https://wardlume.github.io/support).
 - 🐛 **Found a bug or have an idea?** [Open an issue](https://github.com/arpitagarwal1301/wardlume/issues/new/choose).
 - 💬 **Questions:** [Discussions](https://github.com/arpitagarwal1301/wardlume/discussions).
 - 💚 **Enjoying Wardlume?** [Sponsor its development](https://github.com/sponsors/arpitagarwal1301).
