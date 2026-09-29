@@ -23,4 +23,4 @@ Wardlume is provided **"as is", without warranty of any kind.** It locks input a
 
 ## Feedback
 
-Bug reports and ideas are welcome in [Issues](https://github.com/arpitagarwal1301/wardlume-screen-lock/issues) and [Discussions](https://github.com/arpitagarwal1301/wardlume-screen-lock/discussions).
+Bug reports and ideas are welcome in [Issues](https://github.com/arpitagarwal1301/wardlume/issues) and [Discussions](https://github.com/arpitagarwal1301/wardlume/discussions).

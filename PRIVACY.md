@@ -28,4 +28,4 @@ Wardlume makes **no network requests** during normal operation. The only time yo
 
 ## Contact
 
-Questions? Open an issue at <https://github.com/arpitagarwal1301/wardlume-screen-lock/issues>.
+Questions? Open an issue at <https://github.com/arpitagarwal1301/wardlume/issues>.

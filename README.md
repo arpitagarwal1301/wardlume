@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/arpitagarwal1301/wardlume-screen-lock/releases/latest"><img src="https://img.shields.io/github/v/release/arpitagarwal1301/wardlume-screen-lock?style=flat-square&label=download" alt="Latest release"></a>
+  <a href="https://github.com/arpitagarwal1301/wardlume/releases/latest"><img src="https://img.shields.io/github/v/release/arpitagarwal1301/wardlume?style=flat-square&label=download" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/platform-macOS%20Tahoe%2026+-lightgrey.svg?style=flat-square" alt="Platform: macOS Tahoe 26+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue?style=flat-square" alt="License: PolyForm Noncommercial 1.0.0"></a>
 </p>
@@ -40,7 +40,7 @@ Installs cleanly — no "damaged" prompt, no quarantine cleanup. Homebrew 6+ req
 
 ### Installer (`.pkg`)
 
-1. Download **`Wardlume-1.7.2.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume-screen-lock/releases/latest).
+1. Download **`Wardlume-1.7.2.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest).
 2. Open it; if macOS calls it "unidentified," **right-click → Open** (or System Settings → Privacy & Security → **Open Anyway**) once.
 3. Click through the installer — Wardlume lands in Applications and opens normally.
 
@@ -119,8 +119,8 @@ Yes, for any **noncommercial** use (personal, study, hobby, nonprofit). Commerci
 
 ## Support
 
-- 🐛 **Found a bug or have an idea?** [Open an issue](https://github.com/arpitagarwal1301/wardlume-screen-lock/issues/new/choose).
-- 💬 **Questions:** [Discussions](https://github.com/arpitagarwal1301/wardlume-screen-lock/discussions).
+- 🐛 **Found a bug or have an idea?** [Open an issue](https://github.com/arpitagarwal1301/wardlume/issues/new/choose).
+- 💬 **Questions:** [Discussions](https://github.com/arpitagarwal1301/wardlume/discussions).
 - 💚 **Enjoying Wardlume?** [Sponsor its development](https://github.com/sponsors/arpitagarwal1301).
 
 ## More
