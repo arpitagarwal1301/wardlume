@@ -42,13 +42,13 @@ Installs cleanly — no "damaged" prompt, no quarantine cleanup. Homebrew 6+ req
 
 ### Installer (`.pkg`)
 
-1. Download **`Wardlume-1.7.2.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest).
+1. Download **`Wardlume-1.7.3.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest).
 2. Open it; if macOS calls it "unidentified," **right-click → Open** (or System Settings → Privacy & Security → **Open Anyway**) once.
 3. Click through the installer — Wardlume lands in Applications and opens normally.
 
 ### Disk image (`.dmg`)
 
-1. Download `Wardlume-1.7.2.dmg` and drag **Wardlume** into Applications.
+1. Download `Wardlume-1.7.3.dmg` and drag **Wardlume** into Applications.
 2. macOS will say **"Wardlume is damaged"** — it isn't; unsigned downloads are just quarantined. Clear it once:
    ```bash
    xattr -dr com.apple.quarantine /Applications/Wardlume.app
@@ -79,7 +79,7 @@ Once Screen Recording is granted, macOS may also ask one time whether Wardlume c
 
 Keeping your Mac awake needs **no permission** — it uses a standard power assertion (the same mechanism as `caffeinate`), held only while the ward is active.
 
-The wizard requests each one, deep-links to the exact System Settings pane, re-checks live as you grant, and offers a one-click **Quit & Reopen** for the grants macOS only applies after a relaunch. If a permission goes missing later, the menu bar shows **Finish permissions setup…** to reopen it — and when everything is granted, opening Wardlume lands on **Settings → Overview** instead.
+Clicking **Enable** adds Wardlume to that permission's list in System Settings, so you usually just flip the switch. A small helper floats beside System Settings with a draggable Wardlume icon in case it isn't listed, and closes itself once the permission is on. The wizard re-checks live as you grant and offers a one-click **Quit & Reopen** for the grants macOS only applies after a relaunch. If a permission goes missing later, the menu bar shows **Finish permissions setup…** to reopen it — and when everything is granted, opening Wardlume lands on **Settings → Overview** instead.
 
 ## FAQ
 

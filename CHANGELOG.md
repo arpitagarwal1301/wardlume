@@ -2,6 +2,14 @@
 
 Downloads for every version are on the [Releases](https://github.com/arpitagarwal1301/wardlume/releases) page. Update with `brew upgrade --cask wardlume`.
 
+## v1.7.3 — Easier permission setup · 2026-09-29
+- 🧲 **Dragging Wardlume into System Settings works.** The icon in the setup helper now drops into the permission list like it does from Finder.
+- 🪟 **One helper that stays put.** A single floating guide sits beside System Settings instead of a new popup for every permission, and closes itself once the permission is on.
+- ✅ **Wardlume is added to the list for you.** Usually you just flip the switch.
+- 🔔 **No leftover macOS alert** after granting Screen Recording.
+- 📂 **Reveal in Finder** reuses its window instead of opening a new one on every click.
+- 🔗 **Check for Updates, Privacy, and Terms** open the new download home directly.
+
 ## v1.7.2 — Cleaner Settings and menu · 2026-09-27
 - 🧭 **Settings reorganized:** Overview · Lock & unlock · Automation · Displays & gestures · Intruder reactions · Advanced.
 - 🔢 **"How Wardlume works"** on Overview: Lock → Step away → Unlock, with your own shortcuts.
