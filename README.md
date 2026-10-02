@@ -26,7 +26,8 @@
 - ⏱️ **Auto-ward when idle** — optionally casts the ward after 1–15 minutes without keyboard or mouse input, with a 10-second countdown you cancel by moving the mouse. Off by default.
 - 🚀 **Launch at login** — starts quietly in the menu bar when you log in, so it's always ready. On by default; toggle it in **Settings → Automation**.
 - 🖥️ **Multi-display aware** — the ward appears on the display you activate it from. Other monitors stay visible but locked (or blacked out, your choice), and plugging or unplugging a monitor never unlocks it.
-- 🔒 **Local-only** — no network, no analytics, no accounts. Nothing leaves your Mac.
+- 🔒 **Local-only, and provably so** — the app is sandboxed with **no network entitlement**, so macOS blocks it from the internet. No analytics, no accounts, nothing leaves your Mac. **Settings → Overview → Privacy & trust** shows this live, and one Terminal command lets you [verify it yourself](PRIVACY.md#verify-it-yourself).
+- 🔄 **In-app updates** — signed updates via the open-source [Sparkle](https://sparkle-project.org) updater, whose downloader runs in its own sandbox. Wardlume asks once before checking automatically, and the update dialog lets you turn automatic installs on or off. You can also change both in **Settings → Advanced**.
 
 > Wardlume isn't notarized by Apple yet. **Homebrew is the cleanest install** — it sidesteps the Gatekeeper "damaged" prompt entirely. The direct downloads work too, with one small one-time step.
 
@@ -42,13 +43,13 @@ Installs cleanly — no "damaged" prompt, no quarantine cleanup. Homebrew 6+ req
 
 ### Installer (`.pkg`)
 
-1. Download **`Wardlume-1.7.3.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest).
+1. Download **`Wardlume-1.7.4.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest).
 2. Open it; if macOS calls it "unidentified," **right-click → Open** (or System Settings → Privacy & Security → **Open Anyway**) once.
 3. Click through the installer — Wardlume lands in Applications and opens normally.
 
 ### Disk image (`.dmg`)
 
-1. Download `Wardlume-1.7.3.dmg` and drag **Wardlume** into Applications.
+1. Download `Wardlume-1.7.4.dmg` and drag **Wardlume** into Applications.
 2. macOS will say **"Wardlume is damaged"** — it isn't; unsigned downloads are just quarantined. Clear it once:
    ```bash
    xattr -dr com.apple.quarantine /Applications/Wardlume.app
@@ -82,6 +83,16 @@ Keeping your Mac awake needs **no permission** — it uses a standard power asse
 Clicking **Enable** adds Wardlume to that permission's list in System Settings, so you usually just flip the switch. A small helper floats beside System Settings with a draggable Wardlume icon in case it isn't listed, and closes itself once the permission is on. The wizard re-checks live as you grant and offers a one-click **Quit & Reopen** for the grants macOS only applies after a relaunch. If a permission goes missing later, the menu bar shows **Finish permissions setup…** to reopen it — and when everything is granted, opening Wardlume lands on **Settings → Overview** instead.
 
 ## FAQ
+
+<details>
+<summary><b>Is Wardlume safe? Why does it need Screen Recording?</b></summary>
+
+Screen Recording is how the glass shows your live desktop behind it. Wardlume can't send what it sees anywhere:
+
+- **No internet, enforced by macOS.** The app is sandboxed with no network entitlement, so macOS refuses every connection it tries. Updates are fetched by Sparkle's separate open-source downloader, which has its own sandbox and only downloads the public update feed and signed updates.
+- **Captures only while the ward is up.** Frames go straight to the GPU to draw the glass and are never saved or recorded. macOS's recording indicator shows exactly when capture is on.
+- **Check it yourself.** Settings → Overview → **Privacy & trust** shows these facts live, or run `codesign -d --entitlements - /Applications/Wardlume.app` and look for the missing `network.client`. See [Privacy → Verify it yourself](PRIVACY.md#verify-it-yourself), including how to confirm it with LuLu or Little Snitch.
+</details>
 
 <details>
 <summary><b>Is my screen hidden while warded?</b></summary>

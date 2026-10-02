@@ -1,0 +1,25 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Wardlume</title>
+        <item>
+            <title>1.7.4</title>
+            <pubDate>Fri, 02 Oct 2026 22:05:43 +0530</pubDate>
+            <sparkle:version>12</sparkle:version>
+            <sparkle:shortVersionString>1.7.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.5</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<h3>Privacy you can verify, and in-app updates</h3>
+<ul>
+<li>🛡️ <b>New Settings → Privacy &amp; security.</b> Live facts read from the app itself: <b>Internet access: blocked by macOS</b>, screen capture only while warded, nothing ever saved. A <b>Privacy</b> button on Overview takes you there.</li>
+<li>🔍 <b>Verify it yourself.</b> One Terminal command shows that Wardlume has no network entitlement, so macOS refuses any connection it tries. LuLu and Little Snitch confirm it too.</li>
+<li>🔄 <b>In-app updates.</b> Updates install from inside Wardlume, signed and checked before install, through a separate sandboxed downloader. Wardlume asks once before checking automatically. Manage it in <b>Settings → Advanced → Updates</b>.</li>
+<li>⚠️ <b>Clear update errors.</b> If a check fails, you&#x27;ll see why: offline, server unreachable, or a server error, with a website download as the fallback.</li>
+<li>💗 <b>Sponsor Wardlume</b> in the menu bar menu.</li>
+<li>⬆️ <b>This is the last manual update.</b> From here on, new versions arrive in the app.</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/arpitagarwal1301/wardlume/releases/download/v1.7.4/Wardlume-1.7.4.zip" length="4142881" type="application/octet-stream" sparkle:edSignature="Z5xjLlM6+1V66VN390hH8cLrvBXBu25iTMoO41lkJ78Jh1BvXJunoylyDO7qm5XmbGzhRSb/WWFPAbB4aNnBBA=="/>
+        </item>
+    </channel>
+</rss>

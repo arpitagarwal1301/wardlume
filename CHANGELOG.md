@@ -2,6 +2,14 @@
 
 Downloads for every version are on the [Releases](https://github.com/arpitagarwal1301/wardlume/releases) page. Update with `brew upgrade --cask wardlume`.
 
+## v1.7.4 — Privacy you can verify, and in-app updates · 2026-10-02
+- 🛡️ **New Settings → Privacy & security.** Live facts read from the app itself: **Internet access: blocked by macOS**, screen capture only while warded, nothing ever saved. A **Privacy** button on Overview takes you there.
+- 🔍 **Verify it yourself.** One Terminal command shows that Wardlume has no network entitlement, so macOS refuses any connection it tries. LuLu and Little Snitch confirm it too.
+- 🔄 **In-app updates.** Updates install from inside Wardlume, signed and checked before install, through a separate sandboxed downloader. Wardlume asks once before checking automatically. Manage it in **Settings → Advanced → Updates**.
+- ⚠️ **Clear update errors.** If a check fails, you'll see why: offline, server unreachable, or a server error, with a website download as the fallback.
+- 💗 **Sponsor Wardlume** in the menu bar menu.
+- ⬆️ **This is the last manual update.** From here on, new versions arrive in the app.
+
 ## v1.7.3 — Easier permission setup · 2026-09-29
 - 🧲 **Dragging Wardlume into System Settings works.** The icon in the setup helper now drops into the permission list like it does from Finder.
 - 🪟 **One helper that stays put.** A single floating guide sits beside System Settings instead of a new popup for every permission, and closes itself once the permission is on.
