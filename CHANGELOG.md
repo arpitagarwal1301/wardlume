@@ -2,6 +2,14 @@
 
 Downloads for every version are on the [Releases](https://github.com/arpitagarwal1301/wardlume/releases) page. Update with `brew upgrade --cask wardlume`.
 
+## v1.8.0 — Intruder photo · 2026-10-03
+- 📷 **Intruder photo (optional, off by default).** When someone fails to unlock while warded (wrong Touch ID or password), Wardlume takes one photo with your Mac's camera. Cancelling never triggers it, and the camera light always shows.
+- 🔒 **Photos stay on this Mac**, inside Wardlume's private folder, and are deleted after 7, 30, or 90 days (or when you choose). Wardlume still has no internet access, so they can't leave your Mac.
+- 🪧 **A clear notice on the ward**, "Failed unlocks are photographed", warns anyone at your desk. You can turn it off.
+- 🔔 **After you unlock**, a card tells you how many failed attempts were photographed, with **View Photos**.
+- 🗂️ **New Settings → Intruder photo** with the switch, a **Take Test Photo** check, the photos, **Open in Finder**, **Export…**, and **Delete All**.
+- 🎛️ **Turn it on or off anywhere:** the menu bar, the optional Camera row in setup, or **Overview → Permissions**, which also links to System Settings to remove camera access entirely. The switch can't be changed while warded.
+
 ## v1.7.4 — Privacy you can verify, and in-app updates · 2026-10-02
 - 🛡️ **New Settings → Privacy & security.** Live facts read from the app itself: **Internet access: blocked by macOS**, screen capture only while warded, nothing ever saved. A **Privacy** button on Overview takes you there.
 - 🔍 **Verify it yourself.** One Terminal command shows that Wardlume has no network entitlement, so macOS refuses any connection it tries. LuLu and Little Snitch confirm it too.

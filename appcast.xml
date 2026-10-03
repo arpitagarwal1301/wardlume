@@ -3,6 +3,25 @@
     <channel>
         <title>Wardlume</title>
         <item>
+            <title>1.8.0</title>
+            <pubDate>Sat, 03 Oct 2026 09:14:45 +0530</pubDate>
+            <sparkle:version>13</sparkle:version>
+            <sparkle:shortVersionString>1.8.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.5</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<h3>Intruder photo</h3>
+<ul>
+<li>📷 <b>Intruder photo (optional, off by default).</b> When someone fails to unlock while warded (wrong Touch ID or password), Wardlume takes one photo with your Mac&#x27;s camera. Cancelling never triggers it, and the camera light always shows.</li>
+<li>🔒 <b>Photos stay on this Mac</b>, inside Wardlume&#x27;s private folder, and are deleted after 7, 30, or 90 days (or when you choose). Wardlume still has no internet access, so they can&#x27;t leave your Mac.</li>
+<li>🪧 <b>A clear notice on the ward</b>, &quot;Failed unlocks are photographed&quot;, warns anyone at your desk. You can turn it off.</li>
+<li>🔔 <b>After you unlock</b>, a card tells you how many failed attempts were photographed, with <b>View Photos</b>.</li>
+<li>🗂️ <b>New Settings → Intruder photo</b> with the switch, a <b>Take Test Photo</b> check, the photos, <b>Open in Finder</b>, <b>Export…</b>, and <b>Delete All</b>.</li>
+<li>🎛️ <b>Turn it on or off anywhere:</b> the menu bar, the optional Camera row in setup, or <b>Overview → Permissions</b>, which also links to System Settings to remove camera access entirely. The switch can&#x27;t be changed while warded.</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/arpitagarwal1301/wardlume/releases/download/v1.8.0/Wardlume-1.8.0.zip" length="4288379" type="application/octet-stream" sparkle:edSignature="B57+y0khTGf5JBwF3xij5IbCJz4x6jYjswiVdHKz9h8a0tULJrIbxrbzToZdKH+GtD653w75KDRlgUjLzT14CA=="/>
+        </item>
+        <item>
             <title>1.7.4</title>
             <pubDate>Fri, 02 Oct 2026 22:05:43 +0530</pubDate>
             <sparkle:version>12</sparkle:version>
