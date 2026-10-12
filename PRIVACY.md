@@ -8,11 +8,12 @@ Wardlume is a local macOS menu-bar app. It does not collect, store, or transmit 
 
 | Capability | Why it's used | Where the data goes |
 |---|---|---|
-| **Screen Recording** | Renders the live desktop as a refracted glass shield while the ward is active (via ScreenCaptureKit). At launch it also takes one 2×2-pixel throwaway capture, so macOS asks for consent before the ward is ever up. | On-screen only. Frames go straight to the GPU, are drawn to the overlay in real time, and are never saved, recorded, or transmitted. The app has no internet access (see [Network](#network)). |
+| **Screen Recording** (optional, **not used by default**) | Only for the **Live glass** look: renders the live desktop as a refracted glass shield while the ward is active (via ScreenCaptureKit). With Live glass on, it also takes one 2×2-pixel throwaway capture at launch, so macOS asks for consent before the ward is ever up. The default **Clear glass** look captures nothing: it's a see-through window, and macOS itself draws your desktop beneath it. | On-screen only. Frames go straight to the GPU, are drawn to the overlay in real time, and are never saved, recorded, or transmitted. The app has no internet access (see [Network](#network)). |
 | **Camera** (optional, **off by default**) | **Intruder photo:** if you turn it on, Wardlume takes one photo with your Mac's camera when an unlock attempt fails while the ward is up (wrong Touch ID until macOS gives up, wrong password, or Touch ID lockout). Never when someone just cancels, never at any other time. macOS always lights the camera indicator while it runs. | Stays on your Mac, inside Wardlume's sandboxed container (not your Pictures folder). Viewable only in Settings after you unlock, deleted automatically after 7, 30 or 90 days (your choice), or when you tap **Delete all**. Never uploaded: the app has no internet access. |
 | **Accessibility** | Installs the input event tap that locks the keyboard, mouse, and trackpad while the ward is active. | Stays on-device. Input events are blocked, not logged or sent anywhere. |
 | **Input Monitoring** | Detects intrusion attempts so the ward can show a reaction. | Stays on-device. Used only to trigger the on-screen reaction. |
 | **Idle time** (no permission required) | When *Auto-ward when idle* is on, reads how long it has been since the last keyboard or mouse input (a single number of seconds) and whether another app is keeping the display awake. | Stays on-device. Used only to decide when to show the auto-ward countdown; never logged or sent anywhere. |
+| **Battery level** (no permission required) | When *Use Clear glass on low battery* is on (Settings → Overview → Ward look), reads whether the Mac is on battery and its charge percentage, to switch Live glass to Clear glass on low battery. | Stays on-device. Never logged or sent anywhere. |
 | **Keep awake** (no permission required) | Holds a power assertion so the display and system don't idle-sleep while the ward is active. Toggle in Settings → Automation. | Nothing is collected. The assertion is a local request to macOS, released when the ward ends. |
 
 ## Intruder photos
@@ -34,7 +35,7 @@ Your preferences (active pack, hotkeys, cooldown, etc.) are stored locally in ma
 
 ## Network
 
-**The Wardlume app can't reach the internet. macOS enforces this, not just a promise.** Wardlume runs in Apple's App Sandbox *without* a network entitlement, so macOS refuses any connection it tries to make. That's the same app that holds Screen Recording, so your screen has no way out.
+**The Wardlume app can't reach the internet. macOS enforces this, not just a promise.** Wardlume runs in Apple's App Sandbox *without* a network entitlement, so macOS refuses any connection it tries to make. That's the same app that holds Screen Recording if you turn on Live glass, so your screen has no way out.
 
 **Updates are the one exception, and they're handled by a separate process.** Starting with v1.7.4, Wardlume updates itself with [Sparkle](https://sparkle-project.org), the open-source updater most Mac apps use:
 - Sparkle's **downloader** runs in its *own* sandbox, with network access and nothing else. It only fetches the update feed (`wardlume.github.io/appcast.xml`) and, once you choose to install, the signed update from Wardlume's public GitHub releases.
@@ -52,7 +53,7 @@ You don't have to take our word for it. In Terminal, run:
 codesign -d --entitlements - /Applications/Wardlume.app
 ```
 
-You'll see `com.apple.security.app-sandbox`, `com.apple.security.screen-recording`, and `com.apple.security.device.camera` (present so Intruder photo *can* be turned on; macOS still asks you first), and **no** `com.apple.security.network.client` or `network.server`. Without those, macOS blocks every connection the app attempts. Settings → Overview → **Privacy & trust** reads the same entitlements live and shows the result.
+You'll see `com.apple.security.app-sandbox`, `com.apple.security.screen-recording` (present so Live glass *can* be turned on), and `com.apple.security.device.camera` (present so Intruder photo *can* be turned on; macOS still asks you first for both), and **no** `com.apple.security.network.client` or `network.server`. Without those, macOS blocks every connection the app attempts. Settings → Overview → **Privacy & trust** reads the same entitlements live and shows the result.
 
 To check the updater too:
 

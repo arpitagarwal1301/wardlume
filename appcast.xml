@@ -3,6 +3,27 @@
     <channel>
         <title>Wardlume</title>
         <item>
+            <title>1.9.0</title>
+            <pubDate>Mon, 12 Oct 2026 21:36:56 +0530</pubDate>
+            <sparkle:version>14</sparkle:version>
+            <sparkle:shortVersionString>1.9.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.5</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description><![CDATA[<h3>Clear glass: no screen recording needed</h3>
+<ul>
+<li>🪟 <b>Clear glass is the new default look.</b> The ward is the see-through &quot;Input locked&quot; screen, up the whole time, so your agents stay visible behind it. It needs <b>no Screen Recording</b>: macOS draws your desktop beneath it and Wardlume never captures a pixel.</li>
+<li>🔐 <b>Setup asks for two permissions now</b>, Accessibility and Input Monitoring. Screen Recording and Camera are optional and can be skipped.</li>
+<li>💧 <b>Live glass is optional.</b> The refracting glass is one click away in <b>Settings → Overview → Ward look</b> or the menu bar&#x27;s <b>Ward look</b> menu. Wardlume explains what Screen Recording is used for before macOS asks, and switches only once the permission is on. Already using it? Nothing changes.</li>
+<li>⌚ <b>On Clear glass, a touch just asks your Apple Watch</b> (and the unlock hint flashes). The locked screen is already showing, so it doesn&#x27;t pop up again.</li>
+<li>🖥️ <b>Every monitor shows &quot;Input locked&quot;</b> on Clear glass when other monitors are set to Show as-is.</li>
+<li>🔋 <b>Clear glass on low battery.</b> Live glass costs more battery, so on battery at 15% or below (your choice: 10–25%) the ward switches to Clear glass, even while locked, and back when you plug in. On by default; turn it off in <b>Ward look</b>.</li>
+<li>🛟 <b>Safer if Screen Recording is turned off.</b> A Live glass ward now switches to Clear glass and <b>stays locked</b>, instead of ending the ward. You&#x27;re told why after you unlock.</li>
+<li>🔋 <b>Less work in the background.</b> Character packs (Wizard, Grumpy Old Man) no longer run a screen capture behind their picture.</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/arpitagarwal1301/wardlume/releases/download/v1.9.0/Wardlume-1.9.0.zip" length="4364817" type="application/octet-stream" sparkle:edSignature="e09McotJhM7/Jpyjx+ZghUotXbQgLv4SWU4YHrFqm8va5bIVx/VpIBIqKFqDMC7VMNLXUEzc1DQC55EEAUp2Cw=="/>
+        </item>
+        <item>
             <title>1.8.0</title>
             <pubDate>Sat, 03 Oct 2026 09:14:45 +0530</pubDate>
             <sparkle:version>13</sparkle:version>

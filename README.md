@@ -12,12 +12,13 @@
 
 **🌐 [wardlume.github.io](https://wardlume.github.io)**: [Download](https://wardlume.github.io/download) · [Docs](https://wardlume.github.io/docs) · [Support](https://wardlume.github.io/support)
 
-**Wardlume** is a macOS menu-bar app for **botsitting** — leaving your AI coding agents (Claude Code, Cursor, …) running while you step away. It locks the keyboard, mouse, and trackpad behind an animated glass shield, so the screen stays fully visible — anyone in the room can watch the agent work — but nothing can be touched. Unlock instantly with Touch ID.
+**Wardlume** is a macOS menu-bar app for **botsitting** — leaving your AI coding agents (Claude Code, Cursor, …) running while you step away. It locks the keyboard, mouse, and trackpad behind a see-through shield, so the screen stays fully visible — anyone in the room can watch the agent work — but nothing can be touched. Unlock instantly with Touch ID. **No screen recording needed.**
 
 ## Features
 
-- 🛡️ **Glass-shield ward** — an animated Metal overlay over your live desktop. The screen stays readable while input is hard-locked at the macOS event-tap level.
-- 🧭 **Guided setup** — a first-launch wizard walks you through all three permissions (request → grant → verified live), powered by [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot), our open-source permissions-onboarding SDK for Mac apps.
+- 🛡️ **Clear glass ward (default)** — a see-through "Input locked" screen over your live desktop, on every monitor. The screen stays readable while input is hard-locked at the macOS event-tap level, and it needs **no Screen Recording**: macOS draws your desktop beneath it, Wardlume never reads a pixel.
+- 💧 **Live glass (optional)** — an animated Metal refraction over the live desktop. Pick it in **Settings → Overview → Ward look** or the menu bar; it asks for Screen Recording only then. On battery at 15% or below it switches to Clear glass by itself to save power (adjustable, or off).
+- 🧭 **Guided setup** — a first-launch wizard walks you through the two required permissions and two optional ones (request → grant → verified live), powered by [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot), our open-source permissions-onboarding SDK for Mac apps.
 - 👆 **Touch ID unlock** — rest your finger or press your unlock shortcut; falls back to your password.
 - ⌚ **Apple Watch unlock** — tap the Mac, then double-press your watch's side button. Built-in setup steps and a "Send test to watch" check are in **Settings → Lock & unlock**.
 - ⌨️ **Configurable hotkeys** — remap the activate and unlock shortcuts, with an optional no-auth emergency-exit key.
@@ -44,13 +45,13 @@ Installs cleanly — no "damaged" prompt, no quarantine cleanup. Homebrew 6+ req
 
 ### Installer (`.pkg`)
 
-1. Download **`Wardlume-1.8.0.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest).
+1. Download **`Wardlume-1.9.0.pkg`** from the [latest release](https://github.com/arpitagarwal1301/wardlume/releases/latest).
 2. Open it; if macOS calls it "unidentified," **right-click → Open** (or System Settings → Privacy & Security → **Open Anyway**) once.
 3. Click through the installer — Wardlume lands in Applications and opens normally.
 
 ### Disk image (`.dmg`)
 
-1. Download `Wardlume-1.8.0.dmg` and drag **Wardlume** into Applications.
+1. Download `Wardlume-1.9.0.dmg` and drag **Wardlume** into Applications.
 2. macOS will say **"Wardlume is damaged"** — it isn't; unsigned downloads are just quarantined. Clear it once:
    ```bash
    xattr -dr com.apple.quarantine /Applications/Wardlume.app
@@ -62,20 +63,23 @@ Installs cleanly — no "damaged" prompt, no quarantine cleanup. Homebrew 6+ req
 
 1. Launch Wardlume — it lives in your menu bar.
 2. Press **⌘⇧L** from anywhere (even while focused in your IDE), or use the menu, to **activate the ward**.
-3. Walk away. The screen stays visible under the glass shield; keyboard, mouse, and trackpad are locked — and your Mac stays awake, so the ward holds and your agents keep running.
+3. Walk away. The screen stays visible under the see-through shield; keyboard, mouse, and trackpad are locked — and your Mac stays awake, so the ward holds and your agents keep running.
 4. Return and **rest your finger on Touch ID** — or press **⌘⇧U** — to unlock.
 
 Want a guaranteed way out? Enable the optional **emergency-exit** shortcut in **Settings → Advanced** (off by default).
 
 ## Permissions
 
-On first launch a **guided setup** (built on [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot)) walks you through the three permissions Wardlume needs, each used only while the ward is active:
+On first launch a **guided setup** (built on [PermissionPilot](https://github.com/arpitagarwal1301/PermissionPilot)) walks you through the two permissions Wardlume needs, plus two optional ones you can skip:
 
 | Permission | Why |
 |---|---|
-| **Screen Recording** | Render the live desktop behind the glass (never saved or transmitted) |
 | **Accessibility** | Lock the keyboard, mouse, and trackpad |
 | **Input Monitoring** | Detect intrusion attempts |
+| **Screen Recording** *(optional)* | Only for the **Live glass** look: render the live desktop through refracting glass (never saved or transmitted). The default Clear glass doesn't need it. |
+| **Camera** *(optional)* | Only for **Intruder photo** (off by default) |
+
+Choose Live glass later and Wardlume explains what Screen Recording is used for before macOS asks; the look switches once the grant takes effect (after one Quit & Reopen). If Screen Recording is ever turned off, the ward simply uses Clear glass and stays locked.
 
 Once Screen Recording is granted, macOS may also ask one time whether Wardlume can **"bypass the system private window picker"** to capture the screen directly. Wardlume triggers this at launch, before any ward is up, so you can click **Allow** right away.
 
@@ -94,12 +98,12 @@ Photos stay on your Mac and can't leave it, because the app has no internet acce
 </details>
 
 <details>
-<summary><b>Is Wardlume safe? Why does it need Screen Recording?</b></summary>
+<summary><b>Is Wardlume safe? Does it need Screen Recording?</b></summary>
 
-Screen Recording is how the glass shows your live desktop behind it. Wardlume can't send what it sees anywhere:
+**No, not by default.** The default **Clear glass** ward is a see-through window: macOS draws your desktop beneath it, and Wardlume never captures a pixel. Screen Recording is only for the optional **Live glass** look (a refracting glass), which asks for it only when you pick it. If you do, Wardlume can't send what it sees anywhere:
 
 - **No internet, enforced by macOS.** The app is sandboxed with no network entitlement, so macOS refuses every connection it tries. Updates are fetched by Sparkle's separate open-source downloader, which has its own sandbox and only downloads the public update feed and signed updates.
-- **Captures only while the ward is up.** Frames go straight to the GPU to draw the glass and are never saved or recorded. macOS's recording indicator shows exactly when capture is on.
+- **Captures only while a Live glass ward is up.** Frames go straight to the GPU to draw the glass and are never saved or recorded. macOS's recording indicator shows exactly when capture is on.
 - **Check it yourself.** Settings → Overview → **Privacy & trust** shows these facts live, or run `codesign -d --entitlements - /Applications/Wardlume.app` and look for the missing `network.client`. See [Privacy → Verify it yourself](PRIVACY.md#verify-it-yourself), including how to confirm it with LuLu or Little Snitch.
 </details>
 

@@ -2,6 +2,16 @@
 
 Downloads for every version are on the [Releases](https://github.com/arpitagarwal1301/wardlume/releases) page. Update with `brew upgrade --cask wardlume`.
 
+## v1.9.0 — Clear glass: no screen recording needed · 2026-10-12
+- 🪟 **Clear glass is the new default look.** The ward is the see-through "Input locked" screen, up the whole time, so your agents stay visible behind it. It needs **no Screen Recording**: macOS draws your desktop beneath it and Wardlume never captures a pixel.
+- 🔐 **Setup asks for two permissions now**, Accessibility and Input Monitoring. Screen Recording and Camera are optional and can be skipped.
+- 💧 **Live glass is optional.** The refracting glass is one click away in **Settings → Overview → Ward look** or the menu bar's **Ward look** menu. Wardlume explains what Screen Recording is used for before macOS asks, and switches only once the permission is on. Already using it? Nothing changes.
+- ⌚ **On Clear glass, a touch just asks your Apple Watch** (and the unlock hint flashes). The locked screen is already showing, so it doesn't pop up again.
+- 🖥️ **Every monitor shows "Input locked"** on Clear glass when other monitors are set to Show as-is.
+- 🔋 **Clear glass on low battery.** Live glass costs more battery, so on battery at 15% or below (your choice: 10–25%) the ward switches to Clear glass, even while locked, and back when you plug in. On by default; turn it off in **Ward look**.
+- 🛟 **Safer if Screen Recording is turned off.** A Live glass ward now switches to Clear glass and **stays locked**, instead of ending the ward. You're told why after you unlock.
+- 🔋 **Less work in the background.** Character packs (Wizard, Grumpy Old Man) no longer run a screen capture behind their picture.
+
 ## v1.8.0 — Intruder photo · 2026-10-03
 - 📷 **Intruder photo (optional, off by default).** When someone fails to unlock while warded (wrong Touch ID or password), Wardlume takes one photo with your Mac's camera. Cancelling never triggers it, and the camera light always shows.
 - 🔒 **Photos stay on this Mac**, inside Wardlume's private folder, and are deleted after 7, 30, or 90 days (or when you choose). Wardlume still has no internet access, so they can't leave your Mac.
